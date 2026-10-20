@@ -1,0 +1,16 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #F5F7FA;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.card {
+  @apply bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow p-5;
+}
+
+.badge {
+  @apply px-2 py-0.5 rounded-full text-xs font-semibold;
+}
