@@ -144,10 +144,17 @@ ping 127.0.0.1 -n 3 >nul
 start "" "http://localhost:5174"
 
 echo.
-echo Both servers are running in separate windows.
-echo   Local access:   http://localhost:5174
-echo   Backend API:    http://localhost:8001
-echo   API docs:       http://localhost:8001/docs
+echo ====================================================================
+echo   Both servers are running in separate windows.
+echo   Local access:       http://localhost:5174
+for /f "tokens=*" %%i in ('python -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(('8.8.8.8', 80)); print(s.getsockname()[0]); s.close()" 2^>nul') do (
+    echo   Same Wi-Fi Access:  http://%%i:5174  (Share with other devices!)
+)
+echo   Backend API:        http://localhost:8001
+echo   API docs:           http://localhost:8001/docs
+echo.
+echo   * NOTE: If other devices on Wi-Fi cannot connect, run: allow_firewall.bat
+echo ====================================================================
 goto end
 
 :tunnel_only
@@ -211,15 +218,23 @@ ping 127.0.0.1 -n 2 >nul
 start "" "http://localhost:5174"
 
 echo.
-echo Access Points:
+echo ====================================================================
+echo   EHS DASHBOARD ACCESS POINTS:
+echo ====================================================================
+echo   This PC (Localhost):    http://localhost:5174
+for /f "tokens=*" %%i in ('python -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(('8.8.8.8', 80)); print(s.getsockname()[0]); s.close()" 2^>nul') do (
+    echo   Same Wi-Fi Access:      http://%%i:5174  (Share with other devices!)
+)
 if exist "%~dp0tunnel_url.txt" (
     for /f "usebackq delims=" %%u in ("%~dp0tunnel_url.txt") do (
-        echo   Cloudflare Auto Link: %%u  (Public access from anywhere!)
+        echo   Cloudflare Remote:      %%u  (Public access from anywhere)
     )
 )
-echo   Local access:         http://localhost:5174
-echo   Backend API:          http://localhost:8001
-echo   API Docs:             http://localhost:8001/docs
+echo   Backend API:            http://localhost:8001
+echo   API Docs:               http://localhost:8001/docs
+echo.
+echo   * NOTE: If other devices on Wi-Fi cannot connect, run: allow_firewall.bat
+echo ====================================================================
 echo.
 echo All services are running in separate windows.
 echo To stop everything: run "start.bat stop" or close the console windows.

@@ -567,10 +567,65 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
             </div>
           )}
 
-          {/* TAB 2: CLOUDFLARE REMOTE ACCESS PORTAL */}
+          {/* TAB 2: CLOUDFLARE REMOTE ACCESS PORTAL & WI-FI SHARING */}
           {activeTab === 'tunnel' && (
             <div className="space-y-6">
-              {/* STATUS BANNER */}
+              {/* LOCAL WI-FI NETWORK ACCESS (FOR DEVICES ON SAME WI-FI) */}
+              <div className="p-6 rounded-3xl bg-gradient-to-r from-teal-50 via-emerald-50 to-white border border-teal-200/90 shadow-xs space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-xl bg-teal-600 text-white flex items-center justify-center font-bold">
+                      <Radio className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900">
+                        Same Wi-Fi / Local Network Access
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Direct connection for any phone, laptop, or tablet on the same office Wi-Fi.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-extrabold uppercase px-2.5 py-1 rounded-full bg-teal-100 text-teal-800 border border-teal-300">
+                    High Speed · No Internet Needed
+                  </span>
+                </div>
+
+                <div className="space-y-1">
+                  <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Wi-Fi Portal URL (Share with devices on same Wi-Fi):
+                  </div>
+                  <div className="flex items-center gap-2 p-2.5 rounded-2xl bg-white border border-teal-200 shadow-2xs">
+                    <input
+                      type="text"
+                      readOnly
+                      value={status?.network?.wifi_url || `http://${window.location.hostname}:5174`}
+                      className="flex-1 bg-transparent text-xs font-mono font-bold text-teal-950 outline-none"
+                    />
+                    <button
+                      onClick={() => {
+                        const url = status?.network?.wifi_url || `http://${window.location.hostname}:5174`
+                        navigator.clipboard.writeText(url)
+                        setCopied(true)
+                        setTimeout(() => setCopied(false), 2000)
+                      }}
+                      className="p-1.5 px-3 rounded-xl bg-teal-700 hover:bg-teal-800 text-white font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                    >
+                      {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                      <span>{copied ? 'Copied' : 'Copy Wi-Fi Link'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="p-3 bg-amber-50/80 border border-amber-200 rounded-2xl text-[11px] text-amber-900 flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <div>
+                    <strong>Cannot connect from another device on the same Wi-Fi?</strong> Windows Defender Firewall might be blocking incoming connections. Double-click <strong className="font-mono bg-white px-1 rounded">allow_firewall.bat</strong> in the project folder to open port 5174 with one click.
+                  </div>
+                </div>
+              </div>
+
+              {/* CLOUDFLARE QUICK TUNNEL STATUS BANNER */}
               <div
                 className={`p-6 rounded-3xl border flex flex-col md:flex-row items-start md:items-center justify-between gap-4 ${
                   tunnelActive

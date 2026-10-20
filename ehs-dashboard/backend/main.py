@@ -6,6 +6,7 @@ import glob
 import sqlite3
 import subprocess
 import time
+import socket
 import hashlib
 import json
 import secrets
@@ -1877,11 +1878,23 @@ def compute_file_sha256(filepath: str) -> str:
     return sha.hexdigest()
 
 
+def get_local_ip() -> str:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        ip = s.getsockname()[0]
+        s.close()
+        return ip
+    except Exception:
+        return "127.0.0.1"
+
+
 @app.get("/api/system/status")
 def get_system_status(db: Session = Depends(get_db)):
     db_size = os.path.getsize(DB_FILE_PATH) if os.path.isfile(DB_FILE_PATH) else 0
     tunnel_url = get_current_tunnel_url()
     tunnel_active = is_cloudflared_running()
+    local_ip = get_local_ip()
 
     git_info = {"is_git": False, "branch": "unknown", "commit": "unknown"}
     try:
@@ -1913,6 +1926,11 @@ def get_system_status(db: Session = Depends(get_db)):
         "status": "online",
         "service": "Greenko Pinnapuram Cluster EHS Dashboard",
         "server_time": datetime.now().isoformat(),
+        "network": {
+            "local_ip": local_ip,
+            "port": 5174,
+            "wifi_url": f"http://{local_ip}:5174",
+        },
         "database": {
             "file": "ehs_dashboard.db",
             "size_bytes": db_size,
