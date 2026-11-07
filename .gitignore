@@ -46,3 +46,5 @@ desktop.ini
 **/backups/*.db
 **/backups/uploaded_*
 **/backups/safety_rollback_*
+.dev_source_backup/
+**/.dev_source_backup/

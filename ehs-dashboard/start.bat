@@ -11,6 +11,9 @@ if /i "%1"=="status" goto show_status
 if /i "%1"=="tunnel" goto tunnel_only
 if /i "%1"=="local" goto run_local
 if /i "%1"=="stop" goto stop_all
+if /i "%1"=="encrypt" goto encrypt_code
+if /i "%1"=="decrypt" goto decrypt_code
+if /i "%1"=="restore" goto decrypt_code
 goto usage
 
 :default_action
@@ -21,7 +24,7 @@ goto run_silent
 :usage
 echo.
 echo   Usage:
-echo     start.bat            - Start backend, frontend, and Cloudflare Quick Tunnel
+echo     start.bat            - Start backend, frontend, and Cloudflare Quick Tunnel (silent)
 echo     start.bat run        - Start backend, frontend, and Cloudflare Quick Tunnel (with windows)
 echo     start.bat silent     - Start EVERYTHING silently in the BACKGROUND (no terminal windows!)
 echo     start.bat status     - Check server status, ports, and Cloudflare tunnel URL
@@ -29,6 +32,8 @@ echo     start.bat local      - Start backend and frontend only (no Cloudflare t
 echo     start.bat tunnel     - Start Cloudflare Quick Tunnel only
 echo     start.bat stop       - Stop all background dashboard and tunnel processes
 echo     start.bat install    - Set up Python venv and install all dependencies
+echo     start.bat encrypt    - Encrypt backend Python files into unreadable binary bytecode
+echo     start.bat restore    - Restore clean readable source code for development (from local backup)
 echo.
 goto end
 
@@ -275,26 +280,26 @@ echo ====================================================================
 echo.
 netstat -aon | findstr :8001 | findstr LISTENING >nul
 if not errorlevel 1 (
-    echo   [UP] Backend API:       http://localhost:8001  (Listening on port 8001)
+    echo   [UP] Backend API:       http://localhost:8001 [Listening on port 8001]
 ) else (
-    echo   [DOWN] Backend API:     Offline (Port 8001 not listening)
+    echo   [DOWN] Backend API:     Offline [Port 8001 not listening]
 )
 
 netstat -aon | findstr :5174 | findstr LISTENING >nul
 if not errorlevel 1 (
-    echo   [UP] Frontend UI:       http://localhost:5174  (Listening on port 5174)
+    echo   [UP] Frontend UI:       http://localhost:5174 [Listening on port 5174]
 ) else (
-    echo   [DOWN] Frontend UI:     Offline (Port 5174 not listening)
+    echo   [DOWN] Frontend UI:     Offline [Port 5174 not listening]
 )
 
 tasklist /FI "IMAGENAME eq cloudflared.exe" 2>nul | findstr /I "cloudflared.exe" >nul
 if not errorlevel 1 (
     if exist "%~dp0tunnel_url.txt" (
         for /f "usebackq delims=" %%u in ("%~dp0tunnel_url.txt") do (
-            echo   [UP] Cloudflare Tunnel: %%u  (Active)
+            echo   [UP] Cloudflare Tunnel: %%u [Active]
         )
     ) else (
-        echo   [UP] Cloudflare Tunnel: Active (Acquiring URL...)
+        echo   [UP] Cloudflare Tunnel: Active [Acquiring URL...]
     )
 ) else (
     echo   [DOWN] Cloudflare Tunnel: Inactive
@@ -327,6 +332,31 @@ if exist "%~dp0tunnel_url.txt" del /f /q "%~dp0tunnel_url.txt" >nul 2>nul
 echo [OK] All dashboard services stopped cleanly.
 goto end
 
+:encrypt_code
+echo.
+echo ====================================================================
+echo   Encrypting Backend Source Code (Unreadable Binary Protection)
+echo ====================================================================
+if not exist "%~dp0backend\venv\Scripts\python.exe" (
+    echo [ERROR] Backend venv not found. Run "start.bat install" first.
+    goto end
+)
+"%~dp0backend\venv\Scripts\python.exe" "%~dp0backend\build_encrypted.py"
+goto end
+
+:decrypt_code
+echo.
+echo ====================================================================
+echo   Restoring Clean Readable Source Code for Development
+echo ====================================================================
+if not exist "%~dp0backend\venv\Scripts\python.exe" (
+    echo [ERROR] Backend venv not found. Run "start.bat install" first.
+    goto end
+)
+"%~dp0backend\venv\Scripts\python.exe" "%~dp0backend\restore_dev_source.py"
+goto end
+
 :end
 endlocal
+exit /b 0
 

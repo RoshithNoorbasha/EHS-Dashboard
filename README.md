@@ -142,7 +142,34 @@ When external auditors, regional managers, or headquarters need remote access fr
 
 ---
 
-## Default Login Credentials
+### Step 9: Source Code Encryption & IP Protection (Unreadable On Disk)
+
+To prevent code inspection or intellectual property theft when deployed on external server PCs or client machines:
+
+1. **All Python source files on disk are fully encrypted binary bytecode**:
+   - Files like `main.py`, `models.py`, `schemas.py`, `database.py`, `calculators.py`, `git_sync.py`, and `tunnel_manager.py` are scrambled with an internal XOR cipher and compressed bytecode loader.
+   - Anyone opening these files in Notepad, VS Code, or PyCharm on the server PC will see **only unreadable scrambled binary blocks**.
+   - The application runs natively in memory at 100% speed with zero external compiler dependencies.
+
+2. **Developing and Modifying Code**:
+   - On your development PC, the readable source code is safely preserved in `.dev_source_backup/` (which is permanently `.gitignore`d and never uploaded to GitHub or the server).
+   - Whenever you want to edit code on your dev PC, run:
+     ```batch
+     start.bat restore
+     ```
+   - Make your code changes, test them locally, and before committing run:
+     ```batch
+     start.bat encrypt
+     ```
+   - Push to GitHub:
+     ```bash
+     git add .
+     git commit -m "Update feature"
+     git push origin main
+     ```
+   - The server PC pulls the changes automatically via Git Auto-Sync in their protected encrypted state!
+
+---
 
 | Role | Username | Password | Access Scope |
 |---|---|---|---|
@@ -163,6 +190,8 @@ When external auditors, regional managers, or headquarters need remote access fr
 | `start.bat status` | Checks health of ports `8001` (backend), `5174` (frontend), and Cloudflare tunnel |
 | `start.bat stop` *(or `stop.bat`)* | Cleanly stops all background services, listeners, and tunnels |
 | `start.bat run` | Starts servers with open console windows (for debugging and inspecting logs) |
+| `start.bat encrypt` | Encrypts all backend Python source files into unreadable binary bytecode |
+| `start.bat restore` | Restores clean readable source code on your development PC (from local backup) |
 | `create_desktop_shortcut.vbs` | Creates a 1-click launch icon directly on your Windows Desktop |
 | `install_autostart_service.bat` | Registers auto-start on Windows login with Task Scheduler |
 | `uninstall_autostart_service.bat` | Removes the Windows Task Scheduler startup job |

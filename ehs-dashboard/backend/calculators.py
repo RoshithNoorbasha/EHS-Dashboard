@@ -1,82 +1,10 @@
-"""Scoring, grading and derived-metric calculations for the EHS dashboard."""
-
-
-def calculate_plant_score(m: dict) -> float:
-    """Calculate a 0-100 score from a metrics dict/row based on Plot-wise benchmark targets:
-    - Near Miss Reporting: Target = 1 / month (10% weight)
-    - Training Hours: Target = 15 hrs / month (10% weight)
-    - Training Sessions: Target = 2 sessions / month (10% weight)
-    - Audits Executed: Target = 2 / year (~0.167 / month) (15% weight)
-    - LOTO Compliance: Target = 100% (15% weight)
-    - Safety Walkdowns (WPI): Target = 2 / month (15% weight)
-    - Statutory Compliance: Target = 100% (10% weight)
-    - Safety Committee Meeting (OHS): Target = 1 / month (10% weight)
-    - Mock Drill: Target = 1 / month (5% weight)
-    - Toolbox Talks (TBT): No target (0% weight)
-    """
-    near_miss = m.get("near_miss", 0) or 0
-    training_hours = m.get("training_hours", 0) or 0
-    training_sessions = m.get("training_sessions", 0) or 0
-    audits = m.get("audits", 0) or 0
-    loto_compliance = m.get("loto_compliance", 0) or 0
-    walkdowns = m.get("walkdowns", 0) or 0
-    statutory_compliance = m.get("statutory_compliance", 0) or 0
-    ohs_meetings = m.get("ohs_meetings", 0) or 0
-    mock_drills = m.get("mock_drills", 0) or 0
-
-    # Sub-component normalization against Plot-wise benchmark targets
-    near_miss_score = min(100.0, (near_miss / 1.0) * 100.0)
-    training_hours_score = min(100.0, (training_hours / 15.0) * 100.0)
-    training_sessions_score = min(100.0, (training_sessions / 2.0) * 100.0)
-    audit_score = min(100.0, (audits / (2.0 / 12.0)) * 100.0)
-    loto_score = min(100.0, float(loto_compliance))
-    walkdowns_score = min(100.0, (walkdowns / 2.0) * 100.0)
-    statutory_score = min(100.0, float(statutory_compliance))
-    ohs_score = min(100.0, (ohs_meetings / 1.0) * 100.0)
-    mock_drill_score = min(100.0, (mock_drills / 1.0) * 100.0)
-
-    total = (
-        near_miss_score * 0.10
-        + training_hours_score * 0.10
-        + training_sessions_score * 0.10
-        + audit_score * 0.15
-        + loto_score * 0.15
-        + walkdowns_score * 0.15
-        + statutory_score * 0.10
-        + ohs_score * 0.10
-        + mock_drill_score * 0.05
-    )
-
-    # Negative grading for actual harm events
-    total -= (m.get("mtc", 0) or 0) * 5
-    total -= (m.get("lti", 0) or 0) * 15
-    total -= (m.get("fatality", 0) or 0) * 40
-
-    return round(max(0.0, min(100.0, total)), 2)
-
-
-def get_grade(score: float) -> dict:
-    if score >= 90:
-        return {"grade": "Platinum", "color": "#8b5cf6", "label": "Excellent"}
-    elif score >= 75:
-        return {"grade": "Gold", "color": "#f59e0b", "label": "Very Good"}
-    elif score >= 50:
-        return {"grade": "Silver", "color": "#64748b", "label": "Average"}
-    else:
-        return {"grade": "Bronze", "color": "#ef4444", "label": "Not Satisfactory"}
-
-
-def compute_derived_rates(m: dict) -> dict:
-    """Fill in LTIR / TRIFR / NMFR if the caller didn't supply them,
-    using the standard OSHA-style per-200,000-man-hours convention."""
-    hours = m.get("safe_man_hours", 0) or 0
-    out = dict(m)
-    if hours > 0:
-        if not out.get("ltir"):
-            out["ltir"] = round((out.get("lti", 0) or 0) * 200000 / hours, 3)
-        if not out.get("trifr"):
-            recordables = (out.get("lti", 0) or 0) + (out.get("mtc", 0) or 0) + (out.get("fac", 0) or 0)
-            out["trifr"] = round(recordables * 200000 / hours, 3)
-        if not out.get("nmfr"):
-            out["nmfr"] = round((out.get("near_miss", 0) or 0) * 200000 / hours, 3)
-    return out
+# -------------------------------------------------------------------------
+# GREENKO PINNAPURAM CLUSTER EHS DASHBOARD
+# PRODUCTION ENCRYPTED MODULE - PROPRIETARY & CONFIDENTIAL
+# WARNING: This file is encrypted binary bytecode. Manual edits will corrupt the application.
+# -------------------------------------------------------------------------
+import marshal as _m, zlib as _z, base64 as _b
+_K = b'greenko_pinnapuram_cluster_ehs_secure_key_2026_x89'
+_P = b'AE?MZBL}n@W=~5z-loc5+WWLKB4{Z68rGW{^Xz#Yk4HO>c8uA!Z{CN5cK;nv=^xHYs}nVLHGio`erai75@W$P|LDd-o*me-L1{!~x8mMsR9}P~WFDb`ZdAW$DE=xW&ihG5LrP*emehfx`bV}4jv!0Q76Imi?sE?Td0|dtcMdQ*ICQC9e9Pvu2#|>l95;=0(922YsLt?!kh_>zzE`s3VL`1VLL@}mE9u~(1A$9^o;|c({OM~BxVcm=6)=iW`TEv*PshKTwA>d=CxKqMO{kh>&RuJ1$lBfH*KPG@F*YwY^D7AYSQkFTM;0uQGIPbnYLQ7E*y>qH?bL#}LWqtG1R_8G^4H*g$ZLRSbLHu2e{2E=A#K^!GZ>?kTV^)l!p8ctdJk415FAY`#?z^^%Pp9_Iqy+rPwzQkBGY_gt1%?}3J89lXlAjtOtzYf$R`^QAkM>lKgd`!3knhmGpg#6y@qwD-_j339`g9ol`pHpNawrTQH~myAcDByo{=Ki69*NaXj2kGY`<>lw6T<b5fwuJ&2+saVihyxTcw`re}g#(6}fF)iZahJol{O-l|->v(ZFF8wvCj<Gz3vf$D3(&G;S(7sruy`^`r<FlwwuYAHIlO<sb!D&pDNg8N%6deM^rmS=CK~DN3^%Ma$0^QHy*6u>NJHJ3j`|zQv^36QCENL~C%2(G-C%a79BpOD9$Aj&=0#8;R4z6s-SB4zCoI0X(iA7s7ix`QGV2m}sq+LE^jwG=miUWRG76&#z>P2u}YAgVxK88mUth$p18v6R761XfSt=CbNH}YwQ+a6zw?k%kAWWaJQ2-3qZmko<UtS)eMYHtW}MIC-6t+^ffyq4!?0X)68LCuL4Dmn|~-0u?F|JV)rLH3o#1m>^xwcbY<;zUn9$h#MvyG=klnwTksRlWOQ?X7A9?Ib%tt1rjnrg1U>GCVx81ktg+F=GC=*3PWYR<jK(NCj_2qL0Y+kxHEtT^tMpczqCrq&MQX4|aq{iH0dy+t(`nEI#3Eg*Ge|EoMRjXDjqMfi>!Y`H5avCNsI3OnJ)QFY`|`m5&dM+OVc}I~Ti(BOH9g@T2>JLpZ)YQTylZ{_?S}l#Lv2~7{V(67NU)wR%>*{Q0?-8e5bFS`bp;)<vbneERQm~Ezqq?a6u?V#mR;ThMRf!F1A28RbS&~;%F0o{vYB>uFFsPYWGQui@In4>1DQ1bY@;5(C9q;9gH>-J`^l_Zqh|Rcdu5BZRKEJL*z!W=;`s2X^`zzlA(@y)PR>XNE<Q!a8N;`hqb@4IV$0<4aN_@4FJw#bctb~M_bLzi7cWzj?|r#%Rd~30g)=9tQ3bYO(3y#M|6F$89%(4C50ByXW@Jw_=K_uNHb+S)f4dnI=lh@9U%$|~z>&}4Q1m$W_2P=_*V>awxprvzq*E|-)vOfs*FgyWLwG8kq<2s0T2BjyVUnM*q|6}<s9k6Zfcy`UvLieFbK4Nc><*YWRg4o)ux*0&C=pG(swoldOZZQK@t*<8u!#}An&**Zr>~)GS@RWo1-Ugu`u0ZZ&74b+ZD&p~<o%0PFd0Z+)9->4;VTrn102DE6+RdV5)ptc8SH^+Rn~(ryiQ95gba#ULl~8pqE-&Yw|;%dQ1RTJGpvCLqO05OTJ`!;;G3v2rPK*wt0gK#@Wiqq!p4g>4pWjA8QVsk^HKQe^3|JtgQe{@O~kkwl7O3EJ~1X2e%0JD;|tH{^XH%KWDEneg^_iezfo*vV-}t?mKZ`#$e)g`m4Q~OnV0*JPRbcQDVHQ(;719|<`&7_-k;4G92W>4el_`24*2aIwy^Cg1F(Q%+<_BBOUxoI7d*YJy((S`S7WXCKYT*p9q#^~kT`)bz(#r>5W7Q$>EWG<dW>nMkbnt1GboL`mu_a}8>>=vQliVuiE#bbgTcCfSxnLBr8ao`rXDN87{B%Ey4!*BA?Q{=0^A1E9GtWwmg<^bn}d+o+$b&Qt2N)h(&VKUE~3yn03i#e>NYw?aI1s1XaI`)PJag<fM=w);bu~pg6M0-U1kx5BU`~x6V8m*T>b;P@Oa*(#;e?`-k(S7+MBCu0(1y)(oX+-xqLR$5{rJs4X}BLBxYs4pj%=}?yCA)1cSL*LzKohcZJLr&FmsbBs9INP_7;T3!B^@wB*#CnYJ49r9$VD%h&aRx1_r588{b^i$bPFWY|s#v;y2MMOIUbRmcfQ@y%C_lW=8*p@VtC>n%;4`1iY!$Q$-Sr(^r~;j1Kx2pzM5VFZ{I6g?bLNU4G1c^~RC4E?!hp&N+|H4|0~^C2)on->Elcy+tOgyJ8@=mBdBW6AVIwWB~LYRv^=*?b{2zI25XxCNgDrJ9H}k2?wrH*}P%0x=LDYBPBkeDl==Q(?wca^vn;O)*Tq(*g3$WYK)|5pH4y$`%LXR7{z4QQZZAj(9P#C+%HY?Gsz9vd&H?6ag9r4JkzY;!DcIdA0~>{>%_&Vs1cjsveSlPG5{oU8V{pw=siH==o;9r9!0a`bKQEe>)-`F+ma`>NlmW$K9TuXh08`2?&cdOUt<B7%vTzx|XY?hQ{H{9BsiJ9mbX)k-wO8umLDWJi`6gi8Fxb;D<sM@qvQ4OOj_>U%4)}g^=xSdc(1rOx#+g4NfCJuzsjHsbSIZ0(ya%3NHbmt}?y(Lb#{O91DEhTTnlFZVPc=T--b6Q}s1_xi`3u0dZTK@r_@mJmu({zlr(cs2{;z(MU)>x)>MZn29^4dR!DB&d@!ndo|LMm?OJ3v4K0$Smxuwr_hxp1E+qp8JkT*LCJ)O#u~|nY~~PPGU0%s1j_mMw0M-i_J|xXC9hRn7jDrw)~H2yHeY-*eXfsxr1%k?d-K0m!`PE`LC23?d_gU}=~niC+b-uk9AALl=#rhOX&ht1TDcxdZJugt+@3{WuG^y?8}TKqTGW1PrgU*+WXF$Jl4bB$Q~aPMU}2?!OYm_+>PbW866|7ZFc&W!MJ-8jze3kxCYN%)1`|uF<o0^Q`^b0M>$?9S0VCh)ebA!ouTR_U1vD9UcNOt!8cCbcVtOGMV^YTMQ|`@q>uYsSI4DKKBJFRFF456_)|>IY8bN@NK7}-bZl=qcs54nai1x<2QaDkP%ZAvP{uF8tpX4MGqR`h2ZGoZ54dyj6K$?fi5KDAAYXllJQ?wRKI{}`q<DgrQzn9LEzJ6%hD+YO_{DvWx<;mCH?5X5Qxm}!}<kkPTdwjkum0$c#M%%XjRUDTd6c!bE@rh|y(k%V~guS<7hQrBl&PEo54IHXpa)NwGmzrZ6m89Zp&P+p!l)U+fuvE>10KGQgBaj6<ma)ubVV-l#)-M^%aPYW78?{b$In;v5`7j^g^{SFtdp5GVho72EcCt$bOkq6Gg$ZLEFNze+AG@?sGq06y52Pr=)M+i$qypacn^HZoNKfm}pe4$Jew4EWz$D3xp`y<I%Z*}bDXPf'
+_d = bytes(b ^ _K[i % len(_K)] for i, b in enumerate(_b.b85decode(_P)))
+exec(_m.loads(_z.decompress(_d)), globals())

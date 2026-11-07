@@ -27,3 +27,5 @@ Thumbs.db
 backend/backups/*.db
 backend/backups/uploaded_*
 backend/backups/safety_rollback_*
+.dev_source_backup/
+backend/.dev_source_backup/
