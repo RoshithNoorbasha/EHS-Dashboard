@@ -28,6 +28,8 @@ import models
 import schemas
 from database import Base, engine, get_db
 from calculators import calculate_plant_score, get_grade, compute_derived_rates
+from git_sync import GitSyncService
+from tunnel_manager import CloudflareTunnelManager
 
 Base.metadata.create_all(bind=engine)
 
@@ -1817,6 +1819,20 @@ os.makedirs(BACKUPS_DIR, exist_ok=True)
 PROJECT_ROOT_DIR = os.path.dirname(BASE_BACKEND_DIR)
 TUNNEL_URL_FILE = os.path.join(PROJECT_ROOT_DIR, "tunnel_url.txt")
 
+tunnel_manager = CloudflareTunnelManager(project_root=PROJECT_ROOT_DIR)
+git_sync_service = GitSyncService(root_dir=PROJECT_ROOT_DIR, branch="main", interval_seconds=30)
+
+@app.on_event("startup")
+def on_startup():
+    git_sync_service.start()
+    tunnel_manager.start_background_monitor()
+
+@app.on_event("shutdown")
+def on_shutdown():
+    git_sync_service.stop()
+    tunnel_manager.stop_background_monitor()
+
+
 
 def find_cloudflared_executable() -> Optional[str]:
     # 1. System PATH
@@ -1922,6 +1938,10 @@ def get_system_status(db: Session = Depends(get_db)):
 
     backups_count = len([f for f in os.listdir(BACKUPS_DIR) if f.endswith(".db")]) if os.path.isdir(BACKUPS_DIR) else 0
 
+    tunnel_stat = tunnel_manager.get_status()
+    tunnel_active = tunnel_stat.get("active", False)
+    tunnel_url = tunnel_stat.get("session", {}).get("url") if tunnel_stat.get("session") else get_current_tunnel_url()
+
     return {
         "status": "online",
         "service": "Greenko Pinnapuram Cluster EHS Dashboard",
@@ -1951,8 +1971,10 @@ def get_system_status(db: Session = Depends(get_db)):
             "active": tunnel_active,
             "url": tunnel_url,
             "cloudflared_available": find_cloudflared_executable() is not None,
+            "details": tunnel_stat,
         },
         "git": git_info,
+        "git_sync": git_sync_service.get_status(),
     }
 
 
@@ -2205,119 +2227,90 @@ def export_full_json(db: Session = Depends(get_db)):
 
 @app.get("/api/system/tunnel/status")
 def get_tunnel_status():
-    is_active = is_cloudflared_running()
-    url = get_current_tunnel_url() if is_active else None
+    stat = tunnel_manager.get_status()
+    session = stat.get("session")
     return {
-        "active": is_active,
-        "url": url,
-        "cloudflared_installed": find_cloudflared_executable() is not None,
+        "active": stat.get("active", False),
+        "url": session.get("url") if (session and stat.get("active")) else None,
+        "cloudflared_installed": stat.get("cloudflared_installed", False),
+        "session": session,
+        "last_session": stat.get("last_session"),
+        "server_time": stat.get("server_time"),
     }
 
 
 @app.post("/api/system/tunnel/start")
-def start_tunnel():
-    cf_exe = find_cloudflared_executable()
-    if not cf_exe:
-        raise HTTPException(400, "cloudflared binary is not available on this server.")
-
-    # If already running with valid URL, return immediately
-    if is_cloudflared_running():
-        existing_url = get_current_tunnel_url()
-        if existing_url:
-            return {"status": "already_running", "active": True, "url": existing_url}
-        # Terminate stale instance
-        try:
-            subprocess.run(["taskkill", "/F", "/IM", "cloudflared.exe"], capture_output=True, timeout=5)
-            time.sleep(1)
-        except Exception:
-            pass
-
-    log_file = os.path.join(os.environ.get("TEMP", r"C:\Temp"), "ehs_cf.log")
-    if os.path.isfile(log_file):
-        try:
-            os.remove(log_file)
-        except Exception:
-            pass
-
-    if os.path.isfile(TUNNEL_URL_FILE):
-        try:
-            os.remove(TUNNEL_URL_FILE)
-        except Exception:
-            pass
-
-    # Launch detached in background without showing console window (CREATE_NO_WINDOW = 0x08000000)
-    creationflags = 0x08000000 if sys.platform == "win32" else 0
-    cmd = [cf_exe, "tunnel", "--url", "http://127.0.0.1:5174", "--logfile", log_file]
+def start_tunnel(req: Optional[schemas.TunnelStartRequest] = None):
+    duration = req.duration_minutes if req else 30
+    username = req.username if req else "admin"
+    full_name = req.full_name if req else "Cluster EHS Admin"
     try:
-        subprocess.Popen(cmd, creationflags=creationflags, close_fds=True)
+        res = tunnel_manager.start_tunnel(
+            duration_minutes=duration,
+            username=username,
+            full_name=full_name,
+            force=False
+        )
+        return res
     except Exception as e:
-        raise HTTPException(500, f"Failed to start cloudflared tunnel: {str(e)}")
+        raise HTTPException(500, f"Failed to start tunnel: {str(e)}")
 
-    # Poll log file for trycloudflare.com URL
-    found_url = None
-    start_time = time.time()
-    import re
-    while time.time() - start_time < 12:
-        if os.path.isfile(log_file):
-            try:
-                with open(log_file, "r", encoding="utf-8", errors="ignore") as f:
-                    content = f.read()
-                    m = re.search(r"https://[a-zA-Z0-9-]+\.trycloudflare\.com", content)
-                    if m:
-                        found_url = m.group(0)
-                        break
-            except Exception:
-                pass
-        time.sleep(0.6)
 
-    if found_url:
-        with open(TUNNEL_URL_FILE, "w", encoding="utf-8") as f:
-            f.write(found_url)
-        return {"status": "started", "active": True, "url": found_url}
-    else:
-        current_url = get_current_tunnel_url()
-        return {
-            "status": "started_pending",
-            "active": is_cloudflared_running(),
-            "url": current_url,
-            "message": "Tunnel process running. Public URL will populate in a few seconds.",
-        }
+@app.post("/api/system/tunnel/regenerate")
+def regenerate_tunnel(req: Optional[schemas.TunnelStartRequest] = None):
+    duration = req.duration_minutes if req else 30
+    username = req.username if req else "admin"
+    full_name = req.full_name if req else "Cluster EHS Admin"
+    try:
+        res = tunnel_manager.start_tunnel(
+            duration_minutes=duration,
+            username=username,
+            full_name=full_name,
+            force=True
+        )
+        return res
+    except Exception as e:
+        raise HTTPException(500, f"Failed to regenerate tunnel: {str(e)}")
 
 
 @app.post("/api/system/tunnel/stop")
-def stop_tunnel():
-    try:
-        subprocess.run(["taskkill", "/F", "/IM", "cloudflared.exe"], capture_output=True, timeout=5)
-    except Exception:
-        pass
-    if os.path.isfile(TUNNEL_URL_FILE):
-        try:
-            os.remove(TUNNEL_URL_FILE)
-        except Exception:
-            pass
-    return {"status": "stopped", "active": False, "url": None}
+def stop_tunnel(username: Optional[str] = Query("admin")):
+    return tunnel_manager.stop_tunnel(username=username, reason="terminated")
+
+
+# --- Git Deployment & Background Auto-Sync Endpoints ---
+
+@app.get("/api/system/git/auto-sync-status")
+def get_git_sync_status():
+    return git_sync_service.get_status()
+
+
+@app.post("/api/system/git/sync-now")
+def sync_git_now():
+    return git_sync_service.check_and_pull(force=True)
+
+
+@app.post("/api/system/git/toggle-auto-sync")
+def toggle_auto_sync(enabled: Optional[bool] = None):
+    if enabled is not None:
+        git_sync_service.enabled = enabled
+    else:
+        git_sync_service.enabled = not git_sync_service.enabled
+    return {
+        "enabled": git_sync_service.enabled,
+        "interval_seconds": git_sync_service.interval_seconds,
+        "status": git_sync_service.last_sync_status,
+    }
 
 
 @app.post("/api/system/git/pull")
 def git_pull():
-    try:
-        res = subprocess.run(
-            ["git", "pull"],
-            cwd=PROJECT_ROOT_DIR,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        return {
-            "success": res.returncode == 0,
-            "stdout": res.stdout,
-            "stderr": res.stderr,
-            "exit_code": res.returncode,
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": str(e),
-            "message": "Git pull command could not execute. Ensure git is installed and repository configured.",
-        }
+    res = git_sync_service.check_and_pull(force=True)
+    return {
+        "success": res.get("status") in ["updated", "up_to_date"],
+        "status": res.get("status"),
+        "message": res.get("message") or res.get("output") or res.get("error", "Git pull complete"),
+        "details": res,
+    }
+
 

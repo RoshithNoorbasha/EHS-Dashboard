@@ -29,7 +29,7 @@ import api from '../api'
 import { useAuth } from '../context/AuthContext'
 
 export default function SuperAdminSettingsModal({ isOpen, onClose }) {
-  const { isSuperAdmin } = useAuth()
+  const { currentUser, isSuperAdmin } = useAuth()
   const [activeTab, setActiveTab] = useState('backups') // 'backups' | 'tunnel' | 'deployment' | 'health'
 
   // Data states
@@ -40,6 +40,8 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
   const [msg, setMsg] = useState({ type: '', text: '' })
   const [backupNote, setBackupNote] = useState('')
   const [copied, setCopied] = useState(false)
+  const [tunnelDuration, setTunnelDuration] = useState(30)
+  const [gitSyncData, setGitSyncData] = useState(null)
 
   // Restore confirmation modal/dialog
   const [confirmRestoreFile, setConfirmRestoreFile] = useState(null)
@@ -50,12 +52,14 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
   const fetchStatusAndBackups = async () => {
     setLoading(true)
     try {
-      const [statusRes, backupsRes] = await Promise.all([
+      const [statusRes, backupsRes, gitSyncRes] = await Promise.all([
         api.get('/system/status'),
         api.get('/system/backups'),
+        api.get('/system/git/auto-sync-status').catch(() => ({ data: null })),
       ])
       setStatus(statusRes.data)
       setBackups(backupsRes.data)
+      if (gitSyncRes?.data) setGitSyncData(gitSyncRes.data)
     } catch (err) {
       console.error('Error fetching system status', err)
     } finally {
@@ -182,21 +186,30 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
     }
   }
 
-  // 7. Start/Stop Cloudflare Tunnel
+  // 7. Start/Stop/Regenerate Cloudflare Tunnel
   const handleToggleTunnel = async (action) => {
     setActionLoading(true)
     setMsg({ type: '', text: '' })
     try {
       if (action === 'start') {
-        const res = await api.post('/system/tunnel/start')
-        setMsg({
-          type: 'success',
-          text: res.data.url
-            ? `Cloudflare Tunnel active! Public link: ${res.data.url}`
-            : 'Tunnel process initiated. Public URL will populate in a moment.',
+        const res = await api.post('/system/tunnel/start', {
+          duration_minutes: tunnelDuration,
+          username: currentUser?.username || 'superadmin',
+          full_name: currentUser?.full_name || 'Super Administrator',
         })
+        if (res.data?.session?.url) {
+          setMsg({
+            type: 'success',
+            text: `Cloudflare Tunnel active for ${tunnelDuration} mins! Public link: ${res.data.session.url}`,
+          })
+        } else {
+          setMsg({
+            type: 'info',
+            text: res.data?.message || 'Tunnel process initiated. Public URL will populate in a moment.',
+          })
+        }
       } else {
-        await api.post('/system/tunnel/stop')
+        await api.post(`/system/tunnel/stop?username=${encodeURIComponent(currentUser?.username || 'superadmin')}`)
         setMsg({ type: 'success', text: 'Cloudflare Tunnel has been stopped.' })
       }
       fetchStatusAndBackups()
@@ -207,22 +220,61 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
     }
   }
 
-  // 8. Git Pull
+  // Delete & Regenerate Tunnel
+  const handleRegenerateTunnel = async () => {
+    setActionLoading(true)
+    setMsg({ type: '', text: '' })
+    try {
+      const res = await api.post('/system/tunnel/regenerate', {
+        duration_minutes: tunnelDuration,
+        username: currentUser?.username || 'superadmin',
+        full_name: currentUser?.full_name || 'Super Administrator',
+      })
+      if (res.data?.session?.url) {
+        setMsg({ type: 'success', text: `Previous tunnel replaced! New link active: ${res.data.session.url}` })
+      }
+      fetchStatusAndBackups()
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.detail || 'Failed to regenerate tunnel' })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  // 8. Git Pull & Auto-Sync
   const handleGitPull = async () => {
     setActionLoading(true)
     setMsg({ type: '', text: '' })
     try {
-      const res = await api.post('/system/git/pull')
-      if (res.data.success) {
-        setMsg({ type: 'success', text: `Git pull successful:\n${res.data.stdout || 'Already up to date.'}` })
+      const res = await api.post('/system/git/sync-now')
+      if (res.data?.status === 'updated') {
+        setMsg({ type: 'success', text: `Git sync successful: Updated to ${res.data.commit_summary || 'latest commit'}` })
+      } else if (res.data?.status === 'up_to_date') {
+        setMsg({ type: 'info', text: 'Local server is already up to date with origin/main.' })
       } else {
-        setMsg({ type: 'error', text: res.data.error || res.data.stderr || 'Git pull failed' })
+        setMsg({ type: 'error', text: res.data?.error || 'Git pull failed' })
       }
       fetchStatusAndBackups()
     } catch (err) {
       setMsg({ type: 'error', text: err.response?.data?.detail || 'Git pull failed' })
     } finally {
       setActionLoading(false)
+    }
+  }
+
+  const handleToggleAutoSync = async () => {
+    try {
+      const res = await api.post('/system/git/toggle-auto-sync')
+      if (gitSyncData) {
+        setGitSyncData({ ...gitSyncData, enabled: res.data.enabled })
+      }
+      setMsg({
+        type: 'success',
+        text: `Git Auto-Sync background polling is now ${res.data.enabled ? 'ENABLED (every 30s)' : 'DISABLED'}.`,
+      })
+      fetchStatusAndBackups()
+    } catch (err) {
+      setMsg({ type: 'error', text: 'Failed to toggle auto-sync' })
     }
   }
 
@@ -654,23 +706,45 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
 
                 <div className="flex items-center gap-2">
                   {tunnelActive ? (
-                    <button
-                      onClick={() => handleToggleTunnel('stop')}
-                      disabled={actionLoading}
-                      className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                    >
-                      <Square className="w-3.5 h-3.5" />
-                      <span>Stop Remote Access</span>
-                    </button>
+                    <>
+                      <button
+                        onClick={handleRegenerateTunnel}
+                        disabled={actionLoading}
+                        title="Delete present link and generate a fresh one"
+                        className="px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${actionLoading ? 'animate-spin' : ''}`} />
+                        <span>Delete &amp; Re-generate</span>
+                      </button>
+                      <button
+                        onClick={() => handleToggleTunnel('stop')}
+                        disabled={actionLoading}
+                        className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                      >
+                        <Square className="w-3.5 h-3.5" />
+                        <span>Stop Tunnel</span>
+                      </button>
+                    </>
                   ) : (
-                    <button
-                      onClick={() => handleToggleTunnel('start')}
-                      disabled={actionLoading}
-                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
-                    >
-                      <Play className="w-3.5 h-3.5" />
-                      <span>Generate Remote Access Link</span>
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={tunnelDuration}
+                        onChange={(e) => setTunnelDuration(Number(e.target.value))}
+                        className="bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 outline-none shadow-2xs"
+                      >
+                        <option value="20">20 Mins (Free tier)</option>
+                        <option value="25">25 Mins</option>
+                        <option value="30">30 Mins (Max)</option>
+                      </select>
+                      <button
+                        onClick={() => handleToggleTunnel('start')}
+                        disabled={actionLoading}
+                        className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5" />
+                        <span>Generate Remote Link</span>
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -680,6 +754,30 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 rounded-3xl bg-white border border-slate-200/90 shadow-sm">
                   {/* Link details */}
                   <div className="md:col-span-2 space-y-4">
+                    {/* Tunnel Meta Details */}
+                    {status?.tunnel?.details?.session && (
+                      <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-200 text-xs flex flex-wrap items-center justify-between gap-2">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-emerald-700 block">Generated By</span>
+                          <span className="font-bold text-slate-900">
+                            {status.tunnel.details.session.created_by_name} (@{status.tunnel.details.session.created_by_username})
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-emerald-700 block">Expires At</span>
+                          <span className="font-mono font-bold text-rose-700">
+                            {new Date(status.tunnel.details.session.expires_at).toLocaleTimeString()}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-emerald-700 block">Time Remaining</span>
+                          <span className="font-mono font-extrabold text-emerald-800">
+                            ~{Math.ceil((status.tunnel.details.session.seconds_remaining || 0) / 60)} mins
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     <div className="space-y-1">
                       <div className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                         Live Public Remote URL (Share with external users):
@@ -718,8 +816,8 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
                       <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-500 pl-1">
                         <li>All traffic is encrypted end-to-end with free Cloudflare TLS/HTTPS.</li>
                         <li>External users can only access frontend UI and authenticated API endpoints.</li>
-                        <li>Your server's real IP address and network ports remain 100% hidden.</li>
-                        <li>You can stop or regenerate this link at any time from this portal.</li>
+                        <li>Strict 30-min auto-destruction protects free-tier tunnel limits.</li>
+                        <li>You can delete &amp; regenerate a fresh link at any moment.</li>
                       </ul>
                     </div>
                   </div>
@@ -738,23 +836,41 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
                   </div>
                 </div>
               ) : (
-                <div className="p-8 rounded-3xl bg-slate-50 border border-dashed border-slate-300 text-center space-y-3">
+                <div className="p-8 rounded-3xl bg-slate-50 border border-dashed border-slate-300 text-center space-y-4">
                   <div className="w-12 h-12 rounded-2xl bg-purple-100 text-purple-700 mx-auto flex items-center justify-center">
                     <Radio className="w-6 h-6" />
                   </div>
                   <div>
                     <h4 className="text-sm font-bold text-slate-800">Remote Access is Currently Inactive</h4>
                     <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
-                      Click the button below to start Cloudflare Quick Tunnel in the background. A secure public link will be generated automatically.
+                      Choose an expiry duration (20-30 mins based on free tier limit) and click below to start Cloudflare Quick Tunnel in the background.
                     </p>
                   </div>
+
+                  <div className="flex items-center justify-center gap-2 max-w-xs mx-auto">
+                    {[20, 25, 30].map((dur) => (
+                      <button
+                        key={dur}
+                        type="button"
+                        onClick={() => setTunnelDuration(dur)}
+                        className={`flex-1 py-1.5 px-3 rounded-xl font-bold text-xs border transition-all ${
+                          tunnelDuration === dur
+                            ? 'bg-purple-700 text-white border-purple-800'
+                            : 'bg-white text-slate-700 border-slate-200 hover:border-purple-300'
+                        }`}
+                      >
+                        {dur}m
+                      </button>
+                    ))}
+                  </div>
+
                   <button
                     onClick={() => handleToggleTunnel('start')}
                     disabled={actionLoading}
                     className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-purple-700 to-indigo-700 hover:from-purple-800 hover:to-indigo-800 text-white font-bold text-xs inline-flex items-center gap-2 shadow-md cursor-pointer"
                   >
                     <Play className="w-4 h-4" />
-                    <span>Launch Cloudflare Quick Tunnel Now</span>
+                    <span>Launch {tunnelDuration}-Minute Quick Tunnel Now</span>
                   </button>
                 </div>
               )}
@@ -764,53 +880,118 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
           {/* TAB 3: SERVER & GIT DEPLOYMENT */}
           {activeTab === 'deployment' && (
             <div className="space-y-6">
-              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-bold text-xs uppercase tracking-wider text-slate-800">
-                    <GitBranch className="w-4 h-4 text-purple-600" />
-                    <span>Git Repository Status</span>
+              {/* GIT BACKGROUND AUTO-SYNC STATUS CARD */}
+              <div className="p-5 rounded-2xl bg-gradient-to-r from-purple-50 via-indigo-50 to-white border border-purple-200/90 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="relative flex h-3 w-3">
+                      <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${gitSyncData?.enabled ? 'bg-emerald-400' : 'bg-slate-400'}`}></span>
+                      <span className={`relative inline-flex rounded-full h-3 w-3 ${gitSyncData?.enabled ? 'bg-emerald-500' : 'bg-slate-400'}`}></span>
+                    </span>
+                    <div>
+                      <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                        <span>Background Git Auto-Sync Engine</span>
+                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${gitSyncData?.enabled ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-slate-200 text-slate-700 border-slate-300'}`}>
+                          {gitSyncData?.enabled ? 'ACTIVE (POLLING EVERY 30s)' : 'PAUSED'}
+                        </span>
+                      </h4>
+                      <p className="text-xs text-slate-500">
+                        Automatically pulls any commit pushed to GitHub and hot-reloads the local server.
+                      </p>
+                    </div>
                   </div>
-                  {status?.git?.is_git && (
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleToggleAutoSync}
+                      className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 text-xs font-bold transition-all shadow-2xs cursor-pointer"
+                    >
+                      {gitSyncData?.enabled ? 'Pause Auto-Sync' : 'Enable Auto-Sync'}
+                    </button>
                     <button
                       onClick={handleGitPull}
                       disabled={actionLoading}
-                      className="px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs"
+                      className="px-3 py-1.5 rounded-xl bg-purple-700 hover:bg-purple-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer"
                     >
                       <RefreshCw className={`w-3 h-3 ${actionLoading ? 'animate-spin' : ''}`} />
-                      <span>Pull Latest Commits</span>
+                      <span>Sync Now</span>
                     </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
-                  <div className="p-3 bg-white rounded-xl border border-slate-200">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Current Branch</span>
-                    <span className="font-mono font-bold text-purple-900">
-                      {status?.git?.is_git ? status.git.branch : 'Not a Git Repository'}
-                    </span>
-                  </div>
-                  <div className="p-3 bg-white rounded-xl border border-slate-200">
-                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Latest Commit</span>
-                    <span className="font-mono font-semibold text-slate-700 truncate block" title={status?.git?.commit}>
-                      {status?.git?.is_git ? status.git.commit : 'N/A'}
-                    </span>
                   </div>
                 </div>
 
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                  <div className="p-3 bg-white rounded-xl border border-purple-100 shadow-2xs">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Repository Branch</span>
+                    <span className="font-mono font-bold text-purple-900 block truncate">
+                      {gitSyncData?.branch || status?.git?.branch || 'main'}
+                    </span>
+                    <span className="text-[10px] text-emerald-600 font-semibold">origin/main synced</span>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-purple-100 shadow-2xs">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Latest Local Commit</span>
+                    <span className="font-mono font-bold text-slate-800 block truncate" title={gitSyncData?.local_commit || status?.git?.commit}>
+                      {gitSyncData?.local_commit || status?.git?.commit || 'N/A'}
+                    </span>
+                    <span className="text-[10px] text-slate-400">Head of branch</span>
+                  </div>
+
+                  <div className="p-3 bg-white rounded-xl border border-purple-100 shadow-2xs">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 block">Last Check Timestamp</span>
+                    <span className="font-mono font-semibold text-slate-700 block truncate">
+                      {gitSyncData?.last_checked_at ? new Date(gitSyncData.last_checked_at).toLocaleTimeString() : 'Awaiting check'}
+                    </span>
+                    <span className="text-[10px] text-slate-400">Status: {gitSyncData?.last_sync_status || 'idle'}</span>
+                  </div>
+                </div>
+
+                {/* Recent Auto-Sync Event Log */}
+                {gitSyncData?.recent_logs && gitSyncData.recent_logs.length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
+                      Live Sync Activity Log:
+                    </span>
+                    <div className="p-2.5 rounded-xl bg-slate-900 text-slate-200 font-mono text-[10px] max-h-28 overflow-y-auto space-y-1">
+                      {gitSyncData.recent_logs.slice(-6).map((log, idx) => (
+                        <div key={idx} className="flex items-start gap-2">
+                          <span className="text-slate-500 flex-shrink-0">
+                            {new Date(log.timestamp).toLocaleTimeString()}
+                          </span>
+                          <span
+                            className={
+                              log.level === 'success'
+                                ? 'text-emerald-400 font-bold'
+                                : log.level === 'error'
+                                ? 'text-rose-400'
+                                : log.level === 'warning'
+                                ? 'text-amber-400'
+                                : 'text-slate-300'
+                            }
+                          >
+                            &bull; {log.message}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-4">
                 {/* Workflow explanation */}
                 <div className="p-4 rounded-xl bg-purple-50 border border-purple-200 space-y-2 text-xs text-purple-950">
                   <span className="font-bold flex items-center gap-1.5">
-                    <Server className="w-4 h-4 text-purple-600" /> Multi-PC Git Sync Workflow:
+                    <Server className="w-4 h-4 text-purple-600" /> Automated Continuous Deployment Workflow:
                   </span>
-                  <ol className="list-decimal list-inside space-y-1 text-[11px] text-purple-900">
+                  <ol className="list-decimal list-inside space-y-1.5 text-[11px] text-purple-900">
                     <li>
                       <strong>On your development PC:</strong> Make code changes, commit, and push (<code className="bg-purple-100 px-1 rounded">git push origin main</code>).
                     </li>
                     <li>
-                      <strong>On this Server PC:</strong> Click "Pull Latest Commits" above or run <code className="bg-purple-100 px-1 rounded">git pull</code>.
+                      <strong>On this Local Server:</strong> The background auto-sync worker detects the new commit within 30 seconds and pulls it automatically.
                     </li>
                     <li>
-                      <strong>Zero Downtime:</strong> FastAPI and Vite have hot-reloading enabled, so changes take effect immediately without stopping the background services!
+                      <strong>Instant Reflection:</strong> Vite and FastAPI hot-reloading apply the changes immediately without restarting terminal windows!
                     </li>
                   </ol>
                 </div>

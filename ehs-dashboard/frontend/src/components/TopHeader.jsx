@@ -14,7 +14,9 @@ import {
   Info,
   Server,
   Cloud,
+  Globe,
 } from 'lucide-react'
+import api from '../api'
 import { useAuth, DEFAULT_USERS } from '../context/AuthContext'
 import { useFilter } from '../context/FilterContext'
 import LoginModal from './LoginModal'
@@ -22,6 +24,7 @@ import UserManagementModal from './UserManagementModal'
 import PlotManagementModal from './PlotManagementModal'
 import SafetyIndexModal from './SafetyIndexModal'
 import SuperAdminSettingsModal from './SuperAdminSettingsModal'
+import RemoteTunnelModal from './RemoteTunnelModal'
 
 const ROLE_BADGE_STYLES = {
   SUPER_ADMIN: 'bg-purple-100 text-purple-800 border-purple-300',
@@ -47,8 +50,24 @@ export default function TopHeader() {
   const [plotModalOpen, setPlotModalOpen] = useState(false)
   const [safetyModalOpen, setSafetyModalOpen] = useState(false)
   const [superAdminModalOpen, setSuperAdminModalOpen] = useState(false)
+  const [tunnelModalOpen, setTunnelModalOpen] = useState(false)
+  const [tunnelSummary, setTunnelSummary] = useState(null)
 
   const dropdownRef = useRef(null)
+
+  // Periodically check tunnel status for quick indicator badge
+  useEffect(() => {
+    if (!isAdmin) return
+    const checkTunnel = async () => {
+      try {
+        const res = await api.get('/system/tunnel/status')
+        setTunnelSummary(res.data)
+      } catch {}
+    }
+    checkTunnel()
+    const interval = setInterval(checkTunnel, 12000)
+    return () => clearInterval(interval)
+  }, [isAdmin, tunnelModalOpen])
 
   // Close dropdown on click outside
   useEffect(() => {
@@ -78,6 +97,7 @@ export default function TopHeader() {
       <PlotManagementModal isOpen={plotModalOpen} onClose={() => setPlotModalOpen(false)} />
       <SafetyIndexModal isOpen={safetyModalOpen} onClose={() => setSafetyModalOpen(false)} />
       <SuperAdminSettingsModal isOpen={superAdminModalOpen} onClose={() => setSuperAdminModalOpen(false)} />
+      <RemoteTunnelModal isOpen={tunnelModalOpen} onClose={() => setTunnelModalOpen(false)} />
 
       <header className="bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 px-4 md:px-8 py-3 flex items-center justify-between shadow-xs">
         {/* LEFT: BREADCRUMB / ACTIVE SCOPE BRAND */}
@@ -117,6 +137,26 @@ export default function TopHeader() {
 
         {/* RIGHT: USER PROFILE BUTTON & DROPDOWN */}
         <div className="flex items-center gap-2.5">
+          {/* EHS ADMIN REMOTE TUNNEL QUICK BUTTON */}
+          {isAdmin && (
+            <button
+              onClick={() => setTunnelModalOpen(true)}
+              title="Cloudflare Remote Access Portal (Auto-expiring 20-30 min links)"
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-2xl font-bold text-xs shadow-xs transition-all cursor-pointer border ${
+                tunnelSummary?.active
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-400/50 shadow-emerald-500/20'
+                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-900 border-indigo-200'
+              }`}
+            >
+              <Globe className={`w-3.5 h-3.5 ${tunnelSummary?.active ? 'animate-pulse text-emerald-200' : 'text-indigo-600'}`} />
+              <span className="hidden sm:inline">
+                {tunnelSummary?.active
+                  ? `Remote Link (${Math.ceil((tunnelSummary?.session?.seconds_remaining || 0) / 60)}m)`
+                  : 'Share Remote Link'}
+              </span>
+            </button>
+          )}
+
           {/* SUPER ADMIN QUICK ACTION BUTTON */}
           {isSuperAdmin && (
             <button
@@ -193,6 +233,19 @@ export default function TopHeader() {
                     >
                       <Server className="w-4 h-4 text-purple-700" />
                       <span>Backups, Tunnel &amp; Server</span>
+                    </button>
+                  )}
+
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false)
+                        setTunnelModalOpen(true)
+                      }}
+                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-xl transition-colors flex items-center gap-2"
+                    >
+                      <Globe className="w-4 h-4 text-indigo-600" />
+                      <span>Share Remote Link (Cloudflare)</span>
                     </button>
                   )}
 

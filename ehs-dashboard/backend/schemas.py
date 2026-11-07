@@ -259,3 +259,26 @@ class UploadOut(BaseModel):
     rows_processed: int
     plant_id: Optional[int] = None
     plot_id: Optional[int] = None
+
+
+# -------------------------------------------------------------- Remote Cloudflare Tunnel Schemas
+class TunnelStartRequest(BaseModel):
+    duration_minutes: int = 30  # 20 to 30 mins
+    username: str
+    full_name: str
+
+
+class TunnelSessionOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    url: Optional[str] = None
+    created_by_username: str
+    created_by_name: str
+    created_at: datetime
+    duration_minutes: int
+    expires_at: datetime
+    status: str
+    stopped_at: Optional[datetime] = None
+    stopped_by_username: Optional[str] = None
+    seconds_remaining: Optional[int] = None
+

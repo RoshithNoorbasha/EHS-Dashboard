@@ -16,7 +16,7 @@ goto usage
 :default_action
 if not exist "backend\venv" goto install
 if not exist "frontend\node_modules" goto install
-goto run
+goto run_silent
 
 :usage
 echo.

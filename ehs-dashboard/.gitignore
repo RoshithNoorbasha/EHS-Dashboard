@@ -15,6 +15,7 @@ build/
 # Logs & Temporary files
 *.log
 ehs_cf.log
+tunnel_url.txt
 
 # Environment & OS files
 .env

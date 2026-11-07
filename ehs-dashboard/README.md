@@ -1,86 +1,169 @@
 # Greenko Pinnapuram Cluster — EHS Digital Dashboard
 
-Full-stack EHS (Environment, Health & Safety) dashboard for the 4-plant
-cluster (Pinnapuram, Ghani, Chenekapalli, Nagalooty).
+Full-stack EHS (Environment, Health & Safety) digital dashboard for the 4-plant cluster (**Pinnapuram, Ghani, Chenekapalli, Nagalooty**).
 
-- **Backend**: FastAPI + SQLAlchemy + SQLite (`backend/`)
-- **Frontend**: React 18 + Vite + Tailwind CSS + Recharts (`frontend/`)
+- **Backend**: FastAPI + SQLAlchemy + SQLite (Port `8001`)
+- **Frontend**: React 18 + Vite + Tailwind CSS + Recharts (Port `5174`)
+- **Remote Access**: Cloudflare Quick Tunnel (20–30 min auto-expiring secure links)
+- **Deployment**: Headless silent Windows background launcher + Git auto-sync daemon
 
-## Quick start (Windows)
+---
 
-```
-start.bat install    # one-time setup: creates the Python venv, installs
-                      # backend + frontend dependencies, seeds sample data
-start.bat run         # launches backend, frontend, and Cloudflare Quick Tunnel!
-start.bat local       # launches backend + frontend only (no tunnel)
-start.bat tunnel      # launches Cloudflare Quick Tunnel only
-start.bat stop        # stops all background services and tunnels
-```
+## Complete Installation Guide (How to Deploy to Other Server PCs)
 
-`start.bat install` requires **Python 3.11+** and **Node.js 18+** already
-on your PATH. 
+Follow these steps to set up and run the dashboard on any Windows server PC or workstation:
 
-`start.bat run` (or simply double-clicking `start.bat`) automatically:
-1. Starts the FastAPI backend on `http://localhost:8001`
-2. Starts the Vite frontend on `http://localhost:5174`
-3. Launches **Cloudflare Quick Tunnel** to auto-generate a public link (`https://*.trycloudflare.com`)
-4. Automatically copies the public Cloudflare link to your clipboard so you can immediately share it!
-5. Opens `http://localhost:5174` in your default browser.
+### Step 1: Install Prerequisites on the Server PC
 
-## Manual setup (Mac/Linux or if you prefer not to use start.bat)
+Make sure the following three software packages are installed on the server PC:
+
+1. **Python 3.11 or newer**  
+   - Download from: [python.org/downloads](https://www.python.org/downloads/)  
+   - ⚠️ **CRITICAL**: During Python installation, check the box:  
+     ☑ **"Add python.exe to PATH"** before clicking Install.
+
+2. **Node.js (v18 or v20 LTS)**  
+   - Download from: [nodejs.org](https://nodejs.org/) (LTS version recommended).
+
+3. **Git for Windows**  
+   - Download from: [git-scm.com/download/win](https://git-scm.com/download/win).
+
+*(Optional)* **Cloudflared CLI**:
+- If not installed, `start.bat` will automatically download `cloudflared.exe` into `%USERPROFILE%\bin\`.
+- Or install manually via PowerShell:
+  ```powershell
+  winget install --id Cloudflare.cloudflared
+  ```
+
+---
+
+### Step 2: Clone the Repository
+
+Open Command Prompt or PowerShell on the server PC and clone the repository:
 
 ```bash
-# Backend
-cd backend
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-python seed.py              # loads 4 plants + 7 months of sample data
-uvicorn main:app --reload --port 8000
-
-# Frontend (separate terminal)
-cd frontend
-npm install
-npm run dev
+git clone https://github.com/RoshithNoorbasha/EHS-Dashboard.git
+cd EHS-Dashboard
 ```
 
-Then open http://localhost:5173. The Vite dev server proxies `/api/*`
-requests to the FastAPI backend on port 8000, so no extra config is needed.
+---
 
-## What's included
+### Step 3: One-Click Dependency Setup
 
-- **Dashboard**: cluster KPI cards, plant ranking leaderboard, critical
-  safety issues, quick stats
-- **Plant Ranking**: score bar chart, radar comparison, grade legend,
-  month/year filters
-- **Lagging Indicators**: fatality/LTI/MTC/FAC summary table, TRIFR trend,
-  incident-type breakdown, safety pyramid, incident log
-- **Leading Indicators**: near-miss/unsafe-act/unsafe-condition comparison,
-  training hours by plant, training-topic breakdown
-- **Compliance**: heat-map table across PTW/LOTO/statutory/audit/fire-safety,
-  open compliance issues
-- **Data Entry & Upload**: drag-in CSV/XLSX upload with auto-detection for
-  monthly metrics, manual entry form, upload history
-- **Reports & Target Tracking**: FY target tracker with CSV export
+Run the automated installer:
 
-## API
+```batch
+start.bat install
+```
 
-FastAPI auto-generates interactive docs at `http://localhost:8000/docs`
-covering plants, monthly metrics, incidents, near-misses, training records,
-safety issues, audit findings, compliance, and file upload endpoints.
+This single command automatically:
+- Creates the Python virtual environment (`backend/venv`).
+- Installs all backend packages (`fastapi`, `uvicorn`, `pandas`, `sqlalchemy`, `openpyxl`).
+- Seeds the initial database (`ehs_dashboard.db`) with plants, plots, and sample metrics.
+- Installs all frontend node packages (`node_modules`).
+- Pre-compiles the frontend production bundle.
 
-## Notes on scope
+---
 
-This is a working, runnable build of the full spec's data model and core
-workflows — one page (not a Postgres cluster, JWT auth, or PDF report
-generation) to keep local setup to a single `start.bat install`. The
-database is SQLite (`backend/ehs_dashboard.db`, created on first run) so
-there's nothing extra to install or configure. If you outgrow SQLite,
-swapping `database.py` to point at Postgres is a small, contained change
-since the models and queries are plain SQLAlchemy.
+### Step 4: Launch Silently (Zero Terminal Windows)
 
-Sample data (4 plants × 7 months, Jan–Jul 2026) is loaded by `seed.py` /
-`start.bat install` so the dashboard isn't empty on first run. Upload your
-own file (or re-run against real data) via the Data Entry & Upload page —
-it matches the same `Plant,Month,Year,Fatality,LTI,MTC,FAC,SafeManHours,...`
-column layout as the original spec's sample template.
+To run the dashboard completely headless in the background without any command prompt windows remaining open:
+
+- **Simply double-click `start.bat`** (or `start_silent.vbs`)  
+  *or run from command line:*
+  ```batch
+  start.bat silent
+  ```
+
+**What happens automatically:**
+1. FastAPI backend launches silently in the background on port `8001`.
+2. Vite frontend launches silently in the background on port `5174`.
+3. Background Git Auto-Sync daemon activates (polls GitHub for commits every 30s).
+4. Default web browser opens automatically to `http://localhost:5174`.
+5. **No terminal windows remain on your screen.**
+
+---
+
+### Step 5: Setup Automatic Windows Boot / Auto-Start (Recommended)
+
+To ensure the dashboard runs 24/7 even after the server PC reboots or a user signs in:
+
+1. Right-click **`install_autostart_service.bat`** and click **Run as administrator** (or normal user).
+2. It registers a task with Windows Task Scheduler (`EHS_Dashboard_Silent_Server`).
+3. Whenever the computer starts up or logs in, the dashboard and Git auto-sync start silently in the background automatically.
+
+*(To disable autostart later, simply run `uninstall_autostart_service.bat`)*
+
+---
+
+### Step 6: Enable Same Wi-Fi / Local Office Network Sharing
+
+If team members, plant engineers, or management want to view the dashboard from their laptops, tablets, or phones on the **same office Wi-Fi / LAN**:
+
+1. Right-click **`allow_firewall.bat`** and select **Run as administrator**.
+   - This opens inbound port `5174` in Windows Defender Firewall with one click.
+2. Find the server's local IP (e.g., `http://192.168.1.50:5174`).
+   - The exact Wi-Fi address is displayed inside the dashboard header under the scope banner and inside the **Server & Backups** settings.
+3. Any device connected to the same Wi-Fi can now open `http://<SERVER_IP>:5174` with zero configuration!
+
+---
+
+### Step 7: Automated Git Continuous Deployment (Auto-Update)
+
+You can make changes on your development PC, push to GitHub, and have them **automatically reflected on the Server PC**:
+
+1. **On your development machine**:
+   ```bash
+   git add .
+   git commit -m "Update safety charts and report logic"
+   git push origin main
+   ```
+2. **On the Server PC**:
+   - The built-in background daemon (`backend/git_sync.py`) checks GitHub every **30 seconds**.
+   - As soon as new commits are detected, it pulls changes (`git pull origin main`), upgrades dependencies if `requirements.txt` or `package.json` changed, and updates frontend/backend instantly.
+   - **Zero downtime**: Vite HMR and FastAPI hot-reload apply changes without restarting the server!
+
+---
+
+### Step 8: Cloudflare Remote Link Sharing (Time-Limited & Multi-Admin)
+
+When external auditors, regional managers, or headquarters need remote access from outside the office Wi-Fi:
+
+1. Log in as an Admin (`admin` or `superadmin`).
+2. Click **"Share Remote Link"** in the top navigation bar.
+3. Select an expiry duration: **20 Mins, 25 Mins, or 30 Mins** (strict 30-minute maximum to prevent free-tier tunnel exhaustion).
+4. Click **Generate Remote Link**:
+   - Creates an encrypted public HTTPS URL (`https://*.trycloudflare.com`) with a live QR code and 1-click Copy button.
+   - Live visual countdown timer displays remaining time before auto-expiry.
+5. **Multi-Admin Collision Protection**:
+   - If another admin already generated an active link, the portal displays **who generated it**, **time created**, and **countdown to expiry**.
+   - Admins can either wait for it to expire, click **"Delete & Re-generate"** to replace it immediately with a fresh timer, or click **"Stop Link"**.
+   - The moment time runs out, the background watcher terminates the tunnel process automatically.
+
+---
+
+## Default Login Credentials
+
+| Role | Username | Password | Access Scope |
+|---|---|---|---|
+| **Super Admin** | `superadmin` | `SuperAdmin@Greenko2026` | Full system control, database backups, server tunnel, user management |
+| **Cluster Admin** | `admin` | `Admin@Greenko2026` | All plants & plots (Read & Write), remote tunnel sharing |
+| **Manager** | `manager` | `Manager@Greenko2026` | Executive safety review (Read-Only across all plants) |
+| **Site Incharge** | `site_pinnapuram` | `Pinna@Greenko2026` | Pinnapuram Plant data entry (Read & Write) |
+| **Site Incharge** | `site_ghani` | `Ghani@Greenko2026` | Ghani Plant data entry (Read & Write) |
+
+---
+
+## Handy Management Scripts & Commands
+
+| Script / Command | Purpose |
+|---|---|
+| `start.bat` | Starts backend and frontend silently in the background (0 terminal windows) |
+| `start.bat silent` | Explicit silent background start |
+| `start.bat status` | Checks health of ports `8001` (backend), `5174` (frontend), and Cloudflare tunnel |
+| `start.bat stop` *(or `stop.bat`)* | Cleanly stops all background services, listeners, and tunnels |
+| `start.bat run` | Starts servers with open console windows (for debugging and inspecting logs) |
+| `create_desktop_shortcut.vbs` | Creates a 1-click launch icon directly on your Windows Desktop |
+| `install_autostart_service.bat` | Registers auto-start on Windows login with Task Scheduler |
+| `uninstall_autostart_service.bat` | Removes the Windows Task Scheduler startup job |
+| `allow_firewall.bat` | Opens firewall port 5174 for same-network Wi-Fi access |

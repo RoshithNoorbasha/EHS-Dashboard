@@ -189,3 +189,18 @@ class UploadHistory(Base):
     rows_processed = Column(Integer)
     plant_id = Column(Integer, ForeignKey("plants.id"), nullable=True)
     plot_id = Column(Integer, ForeignKey("plots.id"), nullable=True)
+
+
+class RemoteTunnelSession(Base):
+    __tablename__ = "remote_tunnel_sessions"
+    id = Column(Integer, primary_key=True, index=True)
+    url = Column(String(255), nullable=True)
+    created_by_username = Column(String(50), nullable=False)
+    created_by_name = Column(String(100), nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    duration_minutes = Column(Integer, default=30)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    status = Column(String(20), default="active")  # active, expired, terminated
+    stopped_at = Column(DateTime(timezone=True), nullable=True)
+    stopped_by_username = Column(String(50), nullable=True)
+
