@@ -11,6 +11,8 @@ __pycache__/
 # Build & Bundles
 dist/
 build/
+*.zip
+cloudflared.exe
 
 # Logs & Temporary files
 *.log

@@ -21,6 +21,8 @@ build/
 **/build/
 *.timestamp-*.mjs
 **/*.timestamp-*.mjs
+*.zip
+**/*.zip
 
 # Logs & Temporary files
 *.log

@@ -11,12 +11,12 @@ backendScript = scriptDir & "\backend\run.bat"
 frontendScript = scriptDir & "\frontend\run.bat"
 
 ' 1. Start FastAPI backend silently on port 8001
-WshShell.Run """" & backendScript & """", 0, False
+WshShell.Run "cmd /c """ & backendScript & """", 0, False
 
 WScript.Sleep 2500
 
 ' 2. Start Vite frontend silently on port 5174
-WshShell.Run """" & frontendScript & """", 0, False
+WshShell.Run "cmd /c """ & frontendScript & """", 0, False
 
 WScript.Sleep 3500
 

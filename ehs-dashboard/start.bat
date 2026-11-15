@@ -138,12 +138,12 @@ if not exist "frontend\node_modules" (
 
 echo.
 echo === Starting backend on http://0.0.0.0:8001 (Local ^& Network) ===
-start "EHS Dashboard - Backend (FastAPI)" cmd /k "title EHS Dashboard - Backend (FastAPI) && cd /d "%~dp0backend" && call venv\Scripts\activate.bat && uvicorn main:app --reload --host 0.0.0.0 --port 8001"
+start "EHS Dashboard - Backend (FastAPI)" cmd /k "title EHS Dashboard - Backend (FastAPI) && cd /d "%~dp0backend" && call run.bat"
 
 ping 127.0.0.1 -n 3 >nul
 
 echo === Starting frontend on http://0.0.0.0:5174 (Local ^& Network) ===
-start "EHS Dashboard - Frontend (Vite)" cmd /k "title EHS Dashboard - Frontend (Vite) && cd /d "%~dp0frontend" && npm run dev -- --host 0.0.0.0 --port 5174"
+start "EHS Dashboard - Frontend (Vite)" cmd /k "title EHS Dashboard - Frontend (Vite) && cd /d "%~dp0frontend" && call run.bat"
 
 ping 127.0.0.1 -n 3 >nul
 start "" "http://localhost:5174"
@@ -196,12 +196,12 @@ echo   Starting EHS Dashboard with Cloudflare Quick Tunnel
 echo ====================================================================
 
 echo [1/3] Starting backend API on http://0.0.0.0:8001...
-start "EHS Dashboard - Backend (FastAPI)" cmd /k "title EHS Dashboard - Backend (FastAPI) && cd /d "%~dp0backend" && call venv\Scripts\activate.bat && uvicorn main:app --reload --host 0.0.0.0 --port 8001"
+start "EHS Dashboard - Backend (FastAPI)" cmd /k "title EHS Dashboard - Backend (FastAPI) && cd /d "%~dp0backend" && call run.bat"
 
 ping 127.0.0.1 -n 3 >nul
 
 echo [2/3] Starting frontend Vite server on http://0.0.0.0:5174...
-start "EHS Dashboard - Frontend (Vite)" cmd /k "title EHS Dashboard - Frontend (Vite) && cd /d "%~dp0frontend" && npm run dev -- --host 0.0.0.0 --port 5174"
+start "EHS Dashboard - Frontend (Vite)" cmd /k "title EHS Dashboard - Frontend (Vite) && cd /d "%~dp0frontend" && call run.bat"
 
 ping 127.0.0.1 -n 3 >nul
 
