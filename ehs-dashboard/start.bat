@@ -146,15 +146,15 @@ echo === Starting frontend on http://0.0.0.0:5174 (Local ^& Network) ===
 start "EHS Dashboard - Frontend (Vite)" cmd /k "title EHS Dashboard - Frontend (Vite) && cd /d "%~dp0frontend" && call run.bat"
 
 ping 127.0.0.1 -n 3 >nul
-start "" "http://localhost:5174"
+
+call :resolve_network_ip
+start "" "http://!NETWORK_IP!:5174"
 
 echo.
 echo ====================================================================
 echo   Both servers are running in separate windows.
-echo   Local access:       http://localhost:5174
-for /f "tokens=*" %%i in ('python -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(('8.8.8.8', 80)); print(s.getsockname()[0]); s.close()" 2^>nul') do (
-    echo   Same Wi-Fi Access:  http://%%i:5174  (Share with other devices!)
-)
+echo   Network Access:     http://!NETWORK_IP!:5174  (Directly opened in browser!)
+echo   Localhost Access:   http://localhost:5174
 echo   Backend API:        http://localhost:8001
 echo   API docs:           http://localhost:8001/docs
 echo.
@@ -220,23 +220,23 @@ echo [3/3] Cloudflare tunnel skipped (cloudflared not available).
 
 :after_tunnel
 ping 127.0.0.1 -n 2 >nul
-start "" "http://localhost:5174"
+
+call :resolve_network_ip
+start "" "http://!NETWORK_IP!:5174"
 
 echo.
 echo ====================================================================
 echo   EHS DASHBOARD ACCESS POINTS:
 echo ====================================================================
-echo   This PC (Localhost):    http://localhost:5174
-for /f "tokens=*" %%i in ('python -c "import socket; s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(('8.8.8.8', 80)); print(s.getsockname()[0]); s.close()" 2^>nul') do (
-    echo   Same Wi-Fi Access:      http://%%i:5174  (Share with other devices!)
-)
+echo   Network Access (Browser): http://!NETWORK_IP!:5174  (Directly opened in browser!)
+echo   Localhost Access:         http://localhost:5174
 if exist "%~dp0tunnel_url.txt" (
     for /f "usebackq delims=" %%u in ("%~dp0tunnel_url.txt") do (
-        echo   Cloudflare Remote:      %%u  (Public access from anywhere)
+        echo   Cloudflare Remote:        %%u  (Public access from anywhere)
     )
 )
-echo   Backend API:            http://localhost:8001
-echo   API Docs:               http://localhost:8001/docs
+echo   Backend API:              http://localhost:8001
+echo   API Docs:                 http://localhost:8001/docs
 echo.
 echo   * NOTE: If other devices on Wi-Fi cannot connect, run: allow_firewall.bat
 echo ====================================================================
@@ -287,7 +287,9 @@ if not errorlevel 1 (
 
 netstat -aon | findstr :5174 | findstr LISTENING >nul
 if not errorlevel 1 (
+    call :resolve_network_ip
     echo   [UP] Frontend UI:       http://localhost:5174 [Listening on port 5174]
+    echo   [NET] Network Direct:   http://!NETWORK_IP!:5174 (Share on Wi-Fi / LAN)
 ) else (
     echo   [DOWN] Frontend UI:     Offline [Port 5174 not listening]
 )
@@ -355,6 +357,20 @@ if not exist "%~dp0backend\venv\Scripts\python.exe" (
 )
 "%~dp0backend\venv\Scripts\python.exe" "%~dp0backend\restore_dev_source.py"
 goto end
+
+:resolve_network_ip
+set "NETWORK_IP=localhost"
+set "PY_FINDER=python"
+if exist "%~dp0backend\venv\Scripts\python.exe" set "PY_FINDER="%~dp0backend\venv\Scripts\python.exe""
+for /f "tokens=*" %%i in ('!PY_FINDER! -c "import socket; s=socket.socket(socket.AF_INET, socket.SOCK_DGRAM); s.connect(('10.255.255.255', 1)); print(s.getsockname()[0]); s.close()" 2^>nul') do (
+    if not "%%i"=="" if not "%%i"=="127.0.0.1" set "NETWORK_IP=%%i"
+)
+if "!NETWORK_IP!"=="localhost" (
+    for /f "tokens=*" %%i in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "try { (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notmatch '^(127\.|169\.254\.)' }).IPAddress[0] } catch {}" 2^>nul') do (
+        if not "%%i"=="" set "NETWORK_IP=%%i"
+    )
+)
+exit /b 0
 
 :end
 endlocal

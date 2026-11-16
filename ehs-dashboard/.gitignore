@@ -26,8 +26,7 @@ tunnel_url.txt
 Thumbs.db
 
 # Backups
-backend/backups/*.db
-backend/backups/uploaded_*
-backend/backups/safety_rollback_*
+backend/backups/
+ehs-dashboard/backend/backups/
 .dev_source_backup/
 backend/.dev_source_backup/

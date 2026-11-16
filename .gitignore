@@ -45,8 +45,8 @@ desktop.ini
 .idea/
 
 # Local database backups
-**/backups/*.db
-**/backups/uploaded_*
-**/backups/safety_rollback_*
+**/backups/
+.dev_source_backup/
+**/.dev_source_backup/
 .dev_source_backup/
 **/.dev_source_backup/

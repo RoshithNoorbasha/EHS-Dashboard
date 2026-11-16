@@ -79,7 +79,7 @@ To run the dashboard completely headless in the background without any command p
 1. FastAPI backend launches silently in the background on port `8001`.
 2. Vite frontend launches silently in the background on port `5174`.
 3. Background Git Auto-Sync daemon activates (polls GitHub for commits every 30s).
-4. Default web browser opens automatically to `http://localhost:5174`.
+4. Default web browser opens automatically directly to the server's local **Network IP** (e.g., `http://192.168.1.xxx:5174` or `http://10.xxx:5174`) instead of `localhost`, ready for instant sharing with anyone on the same Wi-Fi / LAN!
 5. **No terminal windows remain on your screen.**
 
 ---
