@@ -24,13 +24,36 @@ import {
   Layers,
   Clock,
   Radio,
+  Sliders,
+  Users,
+  UserPlus,
+  Edit3,
+  Shield,
+  Key,
+  Building,
+  Search,
 } from 'lucide-react'
 import api from '../api'
 import { useAuth } from '../context/AuthContext'
+import SafetyFormulaEditor from './SafetyFormulaEditor'
 
-export default function SuperAdminSettingsModal({ isOpen, onClose }) {
+const ROLES = [
+  { value: 'SUPER_ADMIN', label: 'Super Admin (Full System Control & Settings)' },
+  { value: 'ADMIN', label: 'Admin (All Plants Read & Write & Formula)' },
+  { value: 'SITE_INCHARGE', label: 'Site Incharge (Assigned Plants Only)' },
+  { value: 'MANAGER', label: 'Manager (Read-Only Access - All Plants/Plots)' },
+]
+
+const ROLE_BADGES = {
+  SUPER_ADMIN: 'bg-purple-100 text-purple-800 border-purple-200',
+  ADMIN: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  MANAGER: 'bg-slate-100 text-slate-700 border-slate-200',
+  SITE_INCHARGE: 'bg-amber-100 text-amber-800 border-amber-200',
+}
+
+export default function SuperAdminSettingsModal({ isOpen, onClose, initialTab = 'formula' }) {
   const { currentUser, isSuperAdmin } = useAuth()
-  const [activeTab, setActiveTab] = useState('backups') // 'backups' | 'tunnel' | 'deployment' | 'health'
+  const [activeTab, setActiveTab] = useState(initialTab || 'formula') // 'formula' | 'users' | 'backups' | 'tunnel' | 'deployment' | 'health'
 
   // Data states
   const [status, setStatus] = useState(null)
@@ -42,6 +65,23 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
   const [copied, setCopied] = useState(false)
   const [tunnelDuration, setTunnelDuration] = useState(30)
   const [gitSyncData, setGitSyncData] = useState(null)
+
+  // Users & Admin states
+  const [users, setUsers] = useState([])
+  const [plants, setPlants] = useState([])
+  const [usersLoading, setUsersLoading] = useState(false)
+  const [showUserForm, setShowUserForm] = useState(false)
+  const [editingUserId, setEditingUserId] = useState(null)
+  const [userSearch, setUserSearch] = useState('')
+  const [userFormData, setUserFormData] = useState({
+    username: '',
+    full_name: '',
+    email: '',
+    password: '',
+    role: 'ADMIN',
+    assigned_plant_ids: [],
+    is_active: true,
+  })
 
   // Restore confirmation modal/dialog
   const [confirmRestoreFile, setConfirmRestoreFile] = useState(null)
@@ -67,13 +107,115 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
     }
   }
 
+  const fetchUsersAndPlants = async () => {
+    setUsersLoading(true)
+    try {
+      const [uRes, pRes] = await Promise.all([
+        api.get('/auth/users'),
+        api.get('/plants'),
+      ])
+      setUsers(uRes.data || [])
+      setPlants(pRes.data || [])
+    } catch (err) {
+      console.error('Error fetching users and plants', err)
+    } finally {
+      setUsersLoading(false)
+    }
+  }
+
   useEffect(() => {
     if (isOpen) {
+      if (initialTab) setActiveTab(initialTab)
       fetchStatusAndBackups()
+      fetchUsersAndPlants()
       setMsg({ type: '', text: '' })
       setBackupNote('')
+      setShowUserForm(false)
+      setEditingUserId(null)
     }
-  }, [isOpen])
+  }, [isOpen, initialTab])
+
+  // User Management Actions
+  const handleSaveUser = async (e) => {
+    e.preventDefault()
+    setMsg({ type: '', text: '' })
+    try {
+      const payload = {
+        ...userFormData,
+        assigned_plant_ids: Array.isArray(userFormData.assigned_plant_ids)
+          ? userFormData.assigned_plant_ids.join(',')
+          : userFormData.assigned_plant_ids || '',
+      }
+
+      if (editingUserId) {
+        await api.put(`/auth/users/${editingUserId}`, payload)
+        setMsg({ type: 'success', text: `User "${userFormData.username}" updated successfully!` })
+      } else {
+        if (!userFormData.password) {
+          setMsg({ type: 'error', text: 'Password is required to create a new user or administrator.' })
+          return
+        }
+        await api.post('/auth/users', payload)
+        setMsg({ type: 'success', text: `New user "${userFormData.username}" (${userFormData.role}) created successfully!` })
+      }
+
+      setShowUserForm(false)
+      setEditingUserId(null)
+      setUserFormData({
+        username: '',
+        full_name: '',
+        email: '',
+        password: '',
+        role: 'ADMIN',
+        assigned_plant_ids: [],
+        is_active: true,
+      })
+      fetchUsersAndPlants()
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.detail || 'Failed to save user account.' })
+    }
+  }
+
+  const handleEditUser = (u) => {
+    setEditingUserId(u.id)
+    const plantIds = (u.assigned_plant_ids || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map(Number)
+    setUserFormData({
+      username: u.username,
+      full_name: u.full_name,
+      email: u.email || '',
+      password: '',
+      role: u.role,
+      assigned_plant_ids: plantIds,
+      is_active: u.is_active,
+    })
+    setShowUserForm(true)
+  }
+
+  const handleDeleteUser = async (userId, uname) => {
+    if (!window.confirm(`Are you sure you want to permanently delete user account "${uname}"?`)) return
+    try {
+      await api.delete(`/auth/users/${userId}`)
+      setMsg({ type: 'success', text: `User account "${uname}" deleted successfully.` })
+      fetchUsersAndPlants()
+    } catch (err) {
+      setMsg({ type: 'error', text: err.response?.data?.detail || 'Failed to delete user.' })
+    }
+  }
+
+  const togglePlantAssignment = (plantId) => {
+    setUserFormData((prev) => {
+      const current = Array.isArray(prev.assigned_plant_ids) ? prev.assigned_plant_ids : []
+      if (current.includes(plantId)) {
+        return { ...prev, assigned_plant_ids: current.filter((id) => id !== plantId) }
+      } else {
+        return { ...prev, assigned_plant_ids: [...current, plantId] }
+      }
+    })
+  }
 
   if (!isOpen) return null
 
@@ -291,7 +433,7 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto animate-fadeIn">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/90 w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden my-auto">
+      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/90 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden my-auto">
         {/* MODAL HEADER */}
         <div className="p-5 md:px-7 border-b border-slate-200/80 bg-gradient-to-r from-slate-900 via-indigo-950 to-purple-950 text-white flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -299,20 +441,32 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
               <Server className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black tracking-tight text-white">Super Admin System Command</h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-lg font-black tracking-tight text-white">EHS System Command &amp; Administration</h2>
                 <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full bg-purple-500/30 text-purple-200 border border-purple-400/30">
                   Full Control
                 </span>
+                {status?.database && (
+                  <span
+                    className={`text-[10px] font-extrabold uppercase px-2 py-0.5 rounded-full border flex items-center gap-1 ${
+                      status.database.engine === 'postgresql'
+                        ? 'bg-emerald-500/20 text-emerald-300 border-emerald-400/30'
+                        : 'bg-amber-500/20 text-amber-300 border-amber-400/30'
+                    }`}
+                  >
+                    <Database className="w-3 h-3" />
+                    <span>{status.database.engine === 'postgresql' ? 'PostgreSQL 5432' : 'SQLite Fallback'}</span>
+                  </span>
+                )}
               </div>
               <p className="text-xs text-purple-200/70 font-medium">
-                Website backups, Cloudflare remote access portal &amp; server deployment
+                Formula calculation, user administration &amp; RBAC, database backups &amp; Cloudflare remote portal
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors"
+            className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -337,7 +491,7 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
             </div>
             <button
               onClick={() => setMsg({ type: '', text: '' })}
-              className="text-slate-400 hover:text-slate-700 ml-4 font-bold"
+              className="text-slate-400 hover:text-slate-700 ml-4 font-bold cursor-pointer"
             >
               ✕
             </button>
@@ -347,8 +501,35 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
         {/* NAVIGATION TABS */}
         <div className="flex items-center gap-2 px-6 pt-3 bg-slate-50 border-b border-slate-200/80 overflow-x-auto">
           <button
+            onClick={() => setActiveTab('formula')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'formula'
+                ? 'border-teal-600 text-teal-900 bg-white shadow-2xs'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Sliders className="w-3.5 h-3.5 text-teal-600" />
+            <span>Safety Score Formula</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('users')}
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold border-b-2 transition-all whitespace-nowrap cursor-pointer ${
+              activeTab === 'users'
+                ? 'border-purple-600 text-purple-900 bg-white shadow-2xs'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <Users className="w-3.5 h-3.5 text-purple-600" />
+            <span>Users &amp; Admins</span>
+            <span className="ml-1 text-[10px] px-1.5 py-0.2 rounded-full bg-slate-200 text-slate-700 font-extrabold">
+              {users.length}
+            </span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('backups')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold border-b-2 transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'backups'
                 ? 'border-purple-600 text-purple-900 bg-white shadow-2xs'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -363,7 +544,7 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
 
           <button
             onClick={() => setActiveTab('tunnel')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold border-b-2 transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'tunnel'
                 ? 'border-purple-600 text-purple-900 bg-white shadow-2xs'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -380,7 +561,7 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
 
           <button
             onClick={() => setActiveTab('deployment')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold border-b-2 transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'deployment'
                 ? 'border-purple-600 text-purple-900 bg-white shadow-2xs'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -392,7 +573,7 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
 
           <button
             onClick={() => setActiveTab('health')}
-            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold border-b-2 transition-all whitespace-nowrap ${
+            className={`flex items-center gap-2 px-4 py-2.5 rounded-t-xl text-xs font-bold border-b-2 transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'health'
                 ? 'border-purple-600 text-purple-900 bg-white shadow-2xs'
                 : 'border-transparent text-slate-500 hover:text-slate-800'
@@ -405,9 +586,364 @@ export default function SuperAdminSettingsModal({ isOpen, onClose }) {
 
         {/* MODAL BODY */}
         <div className="p-6 overflow-y-auto flex-1 space-y-6">
+          {/* TAB 0: FORMULA */}
+          {activeTab === 'formula' && (
+            <SafetyFormulaEditor onFormulaSaved={() => fetchStatusAndBackups()} />
+          )}
+
+          {/* TAB: USERS & ADMINS */}
+          {activeTab === 'users' && (
+            <div className="space-y-5">
+              {/* Header bar with Search and Add User button */}
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center gap-2">
+                    <Users className="w-4 h-4 text-purple-600" />
+                    <span>User Accounts &amp; Role-Based Access Control (RBAC)</span>
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Super Admin and Admin can create administrator, site incharge, or manager accounts and assign plants.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingUserId(null)
+                    setUserFormData({
+                      username: '',
+                      full_name: '',
+                      email: '',
+                      password: '',
+                      role: 'ADMIN',
+                      assigned_plant_ids: [],
+                      is_active: true,
+                    })
+                    setShowUserForm(!showUserForm)
+                  }}
+                  className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  <span>{showUserForm ? 'Cancel / Close Form' : '+ Create New Admin / User'}</span>
+                </button>
+              </div>
+
+              {/* CREATE / EDIT USER FORM */}
+              {showUserForm && (
+                <form onSubmit={handleSaveUser} className="bg-slate-50 border border-purple-200 rounded-2xl p-5 space-y-4 shadow-xs">
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+                    <h4 className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                      <Shield className="w-4 h-4 text-purple-600" />
+                      <span>
+                        {editingUserId
+                          ? `Edit User #${editingUserId} (${userFormData.username})`
+                          : 'Create New Administrator or User'}
+                      </span>
+                    </h4>
+                    <span className="text-[10px] font-bold text-purple-700 uppercase bg-purple-100 px-2 py-0.5 rounded-full">
+                      {userFormData.role.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 block mb-1">Full Name *</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="e.g. Roshith / Cluster Admin"
+                        value={userFormData.full_name}
+                        onChange={(e) => setUserFormData({ ...userFormData, full_name: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-purple-500/20"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 block mb-1">Username *</label>
+                      <input
+                        type="text"
+                        required
+                        disabled={!!editingUserId}
+                        placeholder="e.g. roshith_admin"
+                        value={userFormData.username}
+                        onChange={(e) => setUserFormData({ ...userFormData, username: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-purple-500/20 disabled:bg-slate-100"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 block mb-1">Email (Optional)</label>
+                      <input
+                        type="email"
+                        placeholder="e.g. roshith@greenko.net"
+                        value={userFormData.email}
+                        onChange={(e) => setUserFormData({ ...userFormData, email: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-purple-500/20"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 block mb-1">
+                        {editingUserId ? 'New Password (leave empty to keep current)' : 'Password *'}
+                      </label>
+                      <input
+                        type="password"
+                        placeholder={editingUserId ? 'Keep existing password' : 'Enter password'}
+                        value={userFormData.password}
+                        onChange={(e) => setUserFormData({ ...userFormData, password: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-purple-500/20"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-semibold text-slate-600 block mb-1">Assigned Role *</label>
+                      <select
+                        value={userFormData.role}
+                        onChange={(e) => setUserFormData({ ...userFormData, role: e.target.value })}
+                        className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 text-xs outline-none focus:ring-2 focus:ring-purple-500/20 cursor-pointer font-bold"
+                      >
+                        {ROLES.map((r) => (
+                          <option key={r.value} value={r.value}>
+                            {r.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-6">
+                      <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={userFormData.is_active}
+                          onChange={(e) => setUserFormData({ ...userFormData, is_active: e.target.checked })}
+                          className="w-4 h-4 rounded text-purple-600 cursor-pointer"
+                        />
+                        <span>Account Active (Allowed to sign in)</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* If Site Incharge, show Plant assignment checkboxes */}
+                  {userFormData.role === 'SITE_INCHARGE' && (
+                    <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3.5 space-y-2">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                        <Building className="w-4 h-4 text-amber-600" />
+                        <span>Assign Plant(s) for Site Incharge:</span>
+                      </div>
+                      <p className="text-[11px] text-amber-700">
+                        Site Incharge will ONLY be able to view and enter data for the selected plant(s).
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                        {plants.map((p) => {
+                          const isAssigned = (userFormData.assigned_plant_ids || []).includes(p.id)
+                          return (
+                            <button
+                              type="button"
+                              key={p.id}
+                              onClick={() => togglePlantAssignment(p.id)}
+                              className={`px-3 py-2 rounded-xl text-xs font-bold border text-left flex items-center justify-between transition-colors cursor-pointer ${
+                                isAssigned
+                                  ? 'bg-amber-600 text-white border-amber-700 shadow-xs'
+                                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                              }`}
+                            >
+                              <span>{p.name}</span>
+                              {isAssigned && <Check className="w-3.5 h-3.5" />}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-2 pt-2 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setShowUserForm(false)}
+                      className="px-4 py-2 border rounded-xl text-xs font-semibold text-slate-600 hover:bg-slate-100 cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-xl text-xs font-bold transition-colors shadow-sm cursor-pointer"
+                    >
+                      {editingUserId ? 'Save User Changes' : 'Create Account'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* USERS SEARCH AND TABLE */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="relative flex-1 max-w-xs">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      placeholder="Search by name, username or email..."
+                      value={userSearch}
+                      onChange={(e) => setUserSearch(e.target.value)}
+                      className="w-full pl-9 pr-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl outline-none focus:ring-1 focus:ring-purple-500"
+                    />
+                  </div>
+                  <button
+                    onClick={fetchUsersAndPlants}
+                    className="p-1.5 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${usersLoading ? 'animate-spin' : ''}`} />
+                    <span>Refresh Users</span>
+                  </button>
+                </div>
+
+                <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white shadow-2xs">
+                  <table className="w-full text-xs text-left">
+                    <thead className="bg-slate-50 text-slate-500 uppercase tracking-wider text-[10px] font-extrabold border-b border-slate-200">
+                      <tr>
+                        <th className="py-2.5 px-3">User</th>
+                        <th className="py-2.5 px-3">Role</th>
+                        <th className="py-2.5 px-3">Scope / Assigned Plants</th>
+                        <th className="py-2.5 px-3">Status</th>
+                        <th className="py-2.5 px-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {users
+                        .filter((u) => {
+                          if (!userSearch) return true
+                          const q = userSearch.toLowerCase()
+                          return (
+                            u.username?.toLowerCase().includes(q) ||
+                            u.full_name?.toLowerCase().includes(q) ||
+                            u.email?.toLowerCase().includes(q)
+                          )
+                        })
+                        .map((u) => {
+                          const assignedNames = (u.assigned_plant_ids || '')
+                            .split(',')
+                            .map((s) => Number(s.trim()))
+                            .filter(Boolean)
+                            .map((id) => plants.find((p) => p.id === id)?.name || `#${id}`)
+
+                          return (
+                            <tr key={u.id} className="hover:bg-slate-50/80 transition-colors">
+                              <td className="py-2.5 px-3">
+                                <div className="font-bold text-slate-900">{u.full_name}</div>
+                                <div className="text-[11px] text-slate-400 font-mono">
+                                  @{u.username} · {u.email || 'No email'}
+                                </div>
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <span
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${
+                                    ROLE_BADGES[u.role] || 'bg-slate-100'
+                                  }`}
+                                >
+                                  {u.role.replace('_', ' ')}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3">
+                                {u.role === 'SITE_INCHARGE' ? (
+                                  assignedNames.length > 0 ? (
+                                    <div className="flex flex-wrap gap-1">
+                                      {assignedNames.map((name) => (
+                                        <span
+                                          key={name}
+                                          className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200 text-[10px] font-bold"
+                                        >
+                                          {name}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-400 italic">No plants assigned</span>
+                                  )
+                                ) : (
+                                  <span className="text-slate-500 font-medium">All Plants &amp; Plots</span>
+                                )}
+                              </td>
+                              <td className="py-2.5 px-3">
+                                <span
+                                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    u.is_active
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-rose-100 text-rose-800'
+                                  }`}
+                                >
+                                  {u.is_active ? 'Active' : 'Inactive'}
+                                </span>
+                              </td>
+                              <td className="py-2.5 px-3 text-right space-x-1">
+                                <button
+                                  onClick={() => handleEditUser(u)}
+                                  className="p-1.5 text-slate-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Edit User"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </button>
+                                {u.username !== 'superadmin' && (
+                                  <button
+                                    onClick={() => handleDeleteUser(u.id, u.username)}
+                                    className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                    title="Delete User"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* TAB 1: BACKUPS */}
           {activeTab === 'backups' && (
             <div className="space-y-6">
+              {/* DATABASE ENGINE STATUS BANNER */}
+              <div className="p-4 rounded-2xl bg-slate-900 text-white border border-slate-800 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-md">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                      status?.database?.engine === 'postgresql'
+                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                        : 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                    }`}
+                  >
+                    <Database className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white">Active Database Engine:</span>
+                      <span
+                        className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                          status?.database?.engine === 'postgresql'
+                            ? 'bg-emerald-500 text-slate-950 font-black'
+                            : 'bg-amber-500 text-slate-950 font-black'
+                        }`}
+                      >
+                        {status?.database?.type || 'SQLite 3 Fallback'}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-300 mt-0.5">
+                      {status?.database?.status_message || 'Database connection healthy.'}
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right text-[11px] text-slate-400 font-mono">
+                  <div>
+                    Host: <strong className="text-slate-200">{status?.database?.host || 'localhost'}</strong>
+                  </div>
+                  <div>
+                    Database:{' '}
+                    <strong className="text-slate-200">{status?.database?.database || 'ehs_dashboard'}</strong>
+                  </div>
+                </div>
+              </div>
+
               {/* TOP ACTION CARDS */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* 1. Instant Snapshot */}

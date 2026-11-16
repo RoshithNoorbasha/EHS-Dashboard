@@ -30,7 +30,8 @@ const links = [
 export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false)
   const [superAdminOpen, setSuperAdminOpen] = useState(false)
-  const { isSuperAdmin } = useAuth()
+  const [settingsTab, setSettingsTab] = useState('formula')
+  const { isSuperAdmin, isAdmin } = useAuth()
 
   return (
     <>
@@ -117,16 +118,19 @@ export default function Sidebar() {
             )
           })}
 
-          {isSuperAdmin && (
+          {(isAdmin || isSuperAdmin) && (
             <div className="pt-3 mt-3 border-t border-white/10">
               <button
-                onClick={() => setSuperAdminOpen(true)}
+                onClick={() => {
+                  setSettingsTab('formula')
+                  setSuperAdminOpen(true)
+                }}
                 className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold text-purple-200 bg-gradient-to-r from-purple-900/60 to-indigo-900/60 hover:from-purple-800 hover:to-indigo-800 border border-purple-500/30 transition-all shadow-md cursor-pointer text-left"
               >
                 <Server className="w-5 h-5 text-purple-400 flex-shrink-0" />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate">Super Admin Portal</div>
-                  <div className="text-[10px] text-purple-300/70 font-normal">Backups &amp; Server Tunnel</div>
+                  <div className="truncate">System Settings</div>
+                  <div className="text-[10px] text-purple-300/70 font-normal">Formula, Users &amp; System</div>
                 </div>
               </button>
             </div>
@@ -143,7 +147,11 @@ export default function Sidebar() {
         </div>
       </aside>
 
-      <SuperAdminSettingsModal isOpen={superAdminOpen} onClose={() => setSuperAdminOpen(false)} />
+      <SuperAdminSettingsModal
+        isOpen={superAdminOpen}
+        onClose={() => setSuperAdminOpen(false)}
+        initialTab={settingsTab}
+      />
     </>
   )
 }

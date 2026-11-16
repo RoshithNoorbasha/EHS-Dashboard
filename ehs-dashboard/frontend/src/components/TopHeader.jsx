@@ -15,6 +15,7 @@ import {
   Server,
   Cloud,
   Globe,
+  Sliders,
 } from 'lucide-react'
 import api from '../api'
 import { useAuth, DEFAULT_USERS } from '../context/AuthContext'
@@ -50,6 +51,7 @@ export default function TopHeader() {
   const [plotModalOpen, setPlotModalOpen] = useState(false)
   const [safetyModalOpen, setSafetyModalOpen] = useState(false)
   const [superAdminModalOpen, setSuperAdminModalOpen] = useState(false)
+  const [superAdminInitialTab, setSuperAdminInitialTab] = useState('formula')
   const [tunnelModalOpen, setTunnelModalOpen] = useState(false)
   const [tunnelSummary, setTunnelSummary] = useState(null)
 
@@ -95,8 +97,20 @@ export default function TopHeader() {
       <LoginModal isOpen={loginModalOpen} onClose={() => setLoginModalOpen(false)} />
       <UserManagementModal isOpen={userModalOpen} onClose={() => setUserModalOpen(false)} />
       <PlotManagementModal isOpen={plotModalOpen} onClose={() => setPlotModalOpen(false)} />
-      <SafetyIndexModal isOpen={safetyModalOpen} onClose={() => setSafetyModalOpen(false)} />
-      <SuperAdminSettingsModal isOpen={superAdminModalOpen} onClose={() => setSuperAdminModalOpen(false)} />
+      <SafetyIndexModal
+        isOpen={safetyModalOpen}
+        onClose={() => setSafetyModalOpen(false)}
+        onOpenFormulaSettings={() => {
+          setSafetyModalOpen(false)
+          setSuperAdminInitialTab('formula')
+          setSuperAdminModalOpen(true)
+        }}
+      />
+      <SuperAdminSettingsModal
+        isOpen={superAdminModalOpen}
+        onClose={() => setSuperAdminModalOpen(false)}
+        initialTab={superAdminInitialTab}
+      />
       <RemoteTunnelModal isOpen={tunnelModalOpen} onClose={() => setTunnelModalOpen(false)} />
 
       <header className="bg-white/90 backdrop-blur-md border-b border-slate-200/80 sticky top-0 z-30 px-4 md:px-8 py-3 flex items-center justify-between shadow-xs">
@@ -223,16 +237,45 @@ export default function TopHeader() {
 
                 {/* Action Buttons */}
                 <div className="space-y-1">
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false)
+                        setSuperAdminInitialTab('formula')
+                        setSuperAdminModalOpen(true)
+                      }}
+                      className="w-full px-3 py-2 text-xs font-bold text-teal-900 bg-teal-50 hover:bg-teal-100 rounded-xl transition-colors flex items-center gap-2 border border-teal-200 cursor-pointer"
+                    >
+                      <Sliders className="w-4 h-4 text-teal-700" />
+                      <span>Safety Score Formula &amp; Rules</span>
+                    </button>
+                  )}
+
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setDropdownOpen(false)
+                        setSuperAdminInitialTab('users')
+                        setSuperAdminModalOpen(true)
+                      }}
+                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:text-purple-700 hover:bg-purple-50 rounded-xl transition-colors flex items-center gap-2 cursor-pointer"
+                    >
+                      <Users className="w-4 h-4 text-purple-600" />
+                      <span>Create Admins &amp; Manage Users</span>
+                    </button>
+                  )}
+
                   {isSuperAdmin && (
                     <button
                       onClick={() => {
                         setDropdownOpen(false)
+                        setSuperAdminInitialTab('backups')
                         setSuperAdminModalOpen(true)
                       }}
-                      className="w-full px-3 py-2 text-xs font-bold text-purple-900 bg-purple-50 hover:bg-purple-100 rounded-xl transition-colors flex items-center gap-2 border border-purple-200"
+                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:text-purple-900 hover:bg-purple-50 rounded-xl transition-colors flex items-center gap-2 cursor-pointer"
                     >
                       <Server className="w-4 h-4 text-purple-700" />
-                      <span>Backups, Tunnel &amp; Server</span>
+                      <span>Database Backups &amp; Server</span>
                     </button>
                   )}
 
@@ -242,36 +285,23 @@ export default function TopHeader() {
                         setDropdownOpen(false)
                         setTunnelModalOpen(true)
                       }}
-                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-xl transition-colors flex items-center gap-2"
+                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:text-indigo-700 hover:bg-indigo-50 rounded-xl transition-colors flex items-center gap-2 cursor-pointer"
                     >
                       <Globe className="w-4 h-4 text-indigo-600" />
                       <span>Share Remote Link (Cloudflare)</span>
                     </button>
                   )}
 
-                  {isAdmin && (
-                    <button
-                      onClick={() => {
-                        setDropdownOpen(false)
-                        setUserModalOpen(true)
-                      }}
-                      className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:text-purple-700 hover:bg-purple-50 rounded-xl transition-colors flex items-center gap-2"
-                    >
-                      <Users className="w-4 h-4 text-purple-600" />
-                      <span>User Management &amp; RBAC</span>
-                    </button>
-                  )}
-
-                <button
-                  onClick={() => {
-                    setDropdownOpen(false)
-                    setPlotModalOpen(true)
-                  }}
-                  className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:text-teal-700 hover:bg-teal-50 rounded-xl transition-colors flex items-center gap-2"
-                >
-                  <MapPin className="w-4 h-4 text-teal-600" />
-                  <span>Configure Plant Plots</span>
-                </button>
+                  <button
+                    onClick={() => {
+                      setDropdownOpen(false)
+                      setPlotModalOpen(true)
+                    }}
+                    className="w-full px-3 py-2 text-xs font-semibold text-slate-700 hover:text-teal-700 hover:bg-teal-50 rounded-xl transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    <MapPin className="w-4 h-4 text-teal-600" />
+                    <span>Configure Plant Plots</span>
+                  </button>
 
                 <button
                   onClick={() => {

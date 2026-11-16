@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight, Sparkles } from 'lucide-react'
+import { X, Lock, User, Eye, EyeOff, AlertCircle, ArrowRight } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function LoginModal({ isOpen, onClose }) {
@@ -23,20 +23,6 @@ export default function LoginModal({ isOpen, onClose }) {
     } else {
       setError(res.error || 'Invalid username or password.')
     }
-  }
-
-  const demoAccounts = [
-    { label: 'Super Admin', user: 'superadmin', pass: 'SuperAdmin@Greenko2026' },
-    { label: 'Cluster Admin', user: 'admin', pass: 'Admin@Greenko2026' },
-    { label: 'Manager', user: 'manager', pass: 'Manager@Greenko2026' },
-    { label: 'Pinnapuram', user: 'site_pinnapuram', pass: 'Pinna@Greenko2026' },
-    { label: 'Ghani', user: 'site_ghani', pass: 'Ghani@Greenko2026' },
-  ]
-
-  const handleQuickFill = (uName, pass) => {
-    setUsername(uName)
-    setPassword(pass)
-    setError('')
   }
 
   return (
@@ -118,24 +104,11 @@ export default function LoginModal({ isOpen, onClose }) {
           </button>
         </form>
 
-        {/* Quick Demo Fill */}
-        <div className="pt-3 border-t border-slate-100">
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 mb-2 justify-center">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Quick Demo Accounts</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5 justify-center">
-            {demoAccounts.map((acc) => (
-              <button
-                key={acc.user}
-                type="button"
-                onClick={() => handleQuickFill(acc.user, acc.pass)}
-                className="px-2 py-0.5 rounded-lg bg-slate-50 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200/70 hover:border-emerald-200 text-[10px] font-medium transition-colors cursor-pointer"
-              >
-                {acc.label}
-              </button>
-            ))}
-          </div>
+        {/* Footer Credit */}
+        <div className="pt-3 border-t border-slate-100 text-center">
+          <p className="text-[11px] font-medium text-slate-400">
+            Designed &amp; Developed by <span className="font-semibold text-emerald-600">Roshith</span>
+          </p>
         </div>
       </div>
     </div>

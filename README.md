@@ -171,6 +171,50 @@ To prevent code inspection or intellectual property theft when deployed on exter
 
 ---
 
+### Step 10: PostgreSQL Auto-Detection with Resilient SQLite Fallback
+
+The backend connects seamlessly to PostgreSQL (pgAdmin) or local SQLite:
+1. **PostgreSQL Credentials**: Automatically checks local or networked PostgreSQL service on port `5432` testing standard server credentials:
+   - Password candidate 1: `Greenko@123`
+   - Password candidate 2: `Greenko@1234`
+   - Environment variable `POSTGRES_PASSWORD`
+2. **Auto-Database Creation**: If the target database `ehs_dashboard` does not exist on PostgreSQL, it automatically creates the database via the default administrative connection.
+3. **Resilient SQLite Fallback**: If PostgreSQL is offline, unreachable, or credentials do not match, the application **automatically falls back to SQLite** (`ehs_dashboard.db`) with zero downtime and logs the status.
+4. **Active Engine Inspection**: Check live status anytime inside **System Settings > Database Backups & Security** or **System Health**.
+
+---
+
+### Step 11: Safety Score Index Formula Customization & Recalculation
+
+Super Admins and Admins can dynamically customize how the 100-Point Safety Score Index is calculated:
+1. Open **System Settings > Safety Score Formula** (or click **"Edit Formula"** in the **"How the Safety Score Index is Calculated"** modal).
+2. Adjust the weights for any of the 9 proactive KPI components:
+   - Near Miss Reporting (default: `10%`)
+   - Safety Training Hours (default: `10%`)
+   - Training Sessions Conducted (default: `10%`)
+   - Safety Audits Executed (default: `15%`)
+   - LOTO Adherence Compliance (default: `15%`)
+   - Leadership Walkdowns / WPI (default: `15%`)
+   - Statutory & Regulatory Adherence (default: `10%`)
+   - Safety Committee Meeting / OHS (default: `10%`)
+   - Mock Emergency Drills (default: `5%`)
+3. Live validation requires weights to sum to exactly **100.0%**.
+4. Adjust monthly targets, reactive incident deduction penalties (MTC, LTI, Fatality), and grade thresholds (Platinum, Gold, Silver, Bronze).
+5. Click **"Save Formula & Recalculate Scores"**: The backend updates the database configuration and **automatically recalculates all historical metrics and plant rankings** across all 4 plants and 12 plots.
+6. Click **"Reset to Factory Defaults"** to revert to standard Greenko settings at any time.
+
+---
+
+### Step 12: User Administration & Role-Based Access Control (RBAC)
+
+Super Admins and Admins can create and manage user accounts directly in **System Settings > Users & Admins**:
+- **Create New Admin / User**: Specify Full Name, Username, Email, Password, and Role (`SUPER_ADMIN`, `ADMIN`, `SITE_INCHARGE`, `MANAGER`).
+- **Site Incharge Plant Scope**: Assign specific plant access (Pinnapuram, Ghani, Chenekapalli, Nagalooty).
+- **Edit & Password Reset**: Update roles, reset passwords, or activate/deactivate accounts.
+- **Production Clean Login**: Demo 1-click accounts have been removed from the login screen for production security. Login footer displays credits: *"Designed & Developed by Roshith"*.
+
+---
+
 | Role | Username | Password | Access Scope |
 |---|---|---|---|
 | **Super Admin** | `superadmin` | `SuperAdmin@Greenko2026` | Full system control, database backups, server tunnel, user management |

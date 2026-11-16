@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import {
   X,
   ShieldCheck,
@@ -19,7 +19,11 @@ import {
   Check,
   AlertCircle,
   ThumbsUp,
+  Sliders,
 } from 'lucide-react'
+import api from '../api'
+import { useAuth } from '../context/AuthContext'
+import SafetyFormulaEditor from './SafetyFormulaEditor'
 
 export const SCORING_COMPONENTS = [
   {
@@ -221,9 +225,11 @@ const WORKED_EXAMPLES = {
   },
 }
 
-export default function SafetyIndexModal({ isOpen, onClose }) {
-  const [activeTab, setActiveTab] = useState('howItWorks') // 'howItWorks' | 'workedExample' | 'metricsList' | 'simulator' | 'grades'
+export default function SafetyIndexModal({ isOpen, onClose, onOpenFormulaSettings }) {
+  const { isAdmin, isSuperAdmin } = useAuth()
+  const [activeTab, setActiveTab] = useState('howItWorks') // 'howItWorks' | 'workedExample' | 'metricsList' | 'simulator' | 'grades' | 'editFormula'
   const [selectedExampleKey, setSelectedExampleKey] = useState('good')
+  const [activeFormula, setActiveFormula] = useState(null)
 
   // Simulator inputs
   const [nearMiss, setNearMiss] = useState(1)
@@ -239,37 +245,115 @@ export default function SafetyIndexModal({ isOpen, onClose }) {
   const [lti, setLti] = useState(0)
   const [fatality, setFatality] = useState(0)
 
+  const fetchFormula = async () => {
+    try {
+      const res = await api.get('/system/safety-formula')
+      if (res.data?.active) {
+        setActiveFormula(res.data.active)
+      }
+    } catch (err) {
+      console.error('Error fetching formula in SafetyIndexModal', err)
+    }
+  }
+
+  useEffect(() => {
+    if (isOpen) {
+      fetchFormula()
+    }
+  }, [isOpen])
+
   if (!isOpen) return null
 
-  // Calculate simulated score
-  const nmScore = Math.min(100, (nearMiss / 1) * 100)
-  const thScore = Math.min(100, (trainingHours / 15) * 100)
-  const tsScore = Math.min(100, (trainingSessions / 2) * 100)
-  const auScore = Math.min(100, (audits / (2 / 12)) * 100)
+  // Active calculation formula values with fallbacks
+  const weights = activeFormula?.weights || {
+    near_miss: 10,
+    training_hours: 10,
+    training_sessions: 10,
+    audits: 15,
+    loto_compliance: 15,
+    walkdowns: 15,
+    statutory_compliance: 10,
+    ohs_meetings: 10,
+    mock_drills: 5,
+  }
+
+  const targets = activeFormula?.targets || {
+    near_miss: 1,
+    training_hours: 15,
+    training_sessions: 2,
+    audits_annual: 2,
+    walkdowns: 2,
+    ohs_meetings: 1,
+    mock_drills: 1,
+  }
+
+  const penaltiesConfig = activeFormula?.penalties || {
+    mtc: 5,
+    lti: 15,
+    fatality: 40,
+  }
+
+  const gradesConfig = activeFormula?.grades || {
+    platinum: 90,
+    gold: 75,
+    silver: 50,
+  }
+
+  // Calculate simulated score dynamically
+  const nmScore = Math.min(100, (nearMiss / (targets.near_miss || 1)) * 100)
+  const thScore = Math.min(100, (trainingHours / (targets.training_hours || 15)) * 100)
+  const tsScore = Math.min(100, (trainingSessions / (targets.training_sessions || 2)) * 100)
+  const auScore = Math.min(100, (audits / ((targets.audits_annual || 2) / 12)) * 100)
   const loScore = Math.min(100, Number(loto))
-  const wkScore = Math.min(100, (walkdowns / 2) * 100)
+  const wkScore = Math.min(100, (walkdowns / (targets.walkdowns || 2)) * 100)
   const stScore = Math.min(100, Number(statutory))
-  const ohScore = Math.min(100, (ohs / 1) * 100)
-  const mdScore = Math.min(100, (mockDrills / 1) * 100)
+  const ohScore = Math.min(100, (ohs / (targets.ohs_meetings || 1)) * 100)
+  const mdScore = Math.min(100, (mockDrills / (targets.mock_drills || 1)) * 100)
 
   const baseScore =
-    nmScore * 0.1 +
-    thScore * 0.1 +
-    tsScore * 0.1 +
-    auScore * 0.15 +
-    loScore * 0.15 +
-    wkScore * 0.15 +
-    stScore * 0.1 +
-    ohScore * 0.1 +
-    mdScore * 0.05
+    nmScore * ((weights.near_miss ?? 10) / 100) +
+    thScore * ((weights.training_hours ?? 10) / 100) +
+    tsScore * ((weights.training_sessions ?? 10) / 100) +
+    auScore * ((weights.audits ?? 15) / 100) +
+    loScore * ((weights.loto_compliance ?? 15) / 100) +
+    wkScore * ((weights.walkdowns ?? 15) / 100) +
+    stScore * ((weights.statutory_compliance ?? 10) / 100) +
+    ohScore * ((weights.ohs_meetings ?? 10) / 100) +
+    mdScore * ((weights.mock_drills ?? 5) / 100)
 
-  const penalties = mtc * 5 + lti * 15 + fatality * 40
+  const penalties =
+    mtc * (penaltiesConfig.mtc ?? 5) +
+    lti * (penaltiesConfig.lti ?? 15) +
+    fatality * (penaltiesConfig.fatality ?? 40)
+
   const simScore = Math.max(0, Math.min(100, baseScore - penalties)).toFixed(1)
 
   let simGrade = 'Bronze'
-  if (simScore >= 90) simGrade = 'Platinum'
-  else if (simScore >= 75) simGrade = 'Gold'
-  else if (simScore >= 50) simGrade = 'Silver'
+  if (simScore >= (gradesConfig.platinum ?? 90)) simGrade = 'Platinum'
+  else if (simScore >= (gradesConfig.gold ?? 75)) simGrade = 'Gold'
+  else if (simScore >= (gradesConfig.silver ?? 50)) simGrade = 'Silver'
+
+  // Dynamic display components reflecting live active weights and targets
+  const displayComponents = SCORING_COMPONENTS.map((c) => ({
+    ...c,
+    weight: weights[c.id] !== undefined ? weights[c.id] : c.weight,
+    target:
+      c.id === 'near_miss'
+        ? `${targets.near_miss || 1} report per month`
+        : c.id === 'training_hours'
+        ? `${targets.training_hours || 15} cumulative hours per month`
+        : c.id === 'training_sessions'
+        ? `${targets.training_sessions || 2} structured sessions per month`
+        : c.id === 'audits'
+        ? `${targets.audits_annual || 2} audits per year (~${((targets.audits_annual || 2) / 12).toFixed(2)} per month)`
+        : c.id === 'walkdowns'
+        ? `${targets.walkdowns || 2} site walkdowns per month`
+        : c.id === 'ohs'
+        ? `${targets.ohs_meetings || 1} meeting per month`
+        : c.id === 'mock_drills'
+        ? `${targets.mock_drills || 1} drill per month`
+        : c.target,
+  }))
 
   const currentExample = WORKED_EXAMPLES[selectedExampleKey]
 
@@ -290,26 +374,49 @@ export default function SafetyIndexModal({ isOpen, onClose }) {
                 <span className="text-[10px] uppercase font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/25 text-emerald-300 border border-emerald-400/30">
                   Plain-Language Guide
                 </span>
+                {activeFormula && (
+                  <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-teal-500/20 text-teal-300 border border-teal-400/30">
+                    Live Formula Synchronized
+                  </span>
+                )}
               </div>
               <p className="text-xs text-teal-200/80 mt-0.5">
                 Step-by-step breakdown of how plots earn points, deductions for incidents, and final grade evaluation
               </p>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer flex-shrink-0"
-            aria-label="Close"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {(isAdmin || isSuperAdmin) && (
+              <button
+                onClick={() => {
+                  if (onOpenFormulaSettings) {
+                    onOpenFormulaSettings()
+                  } else {
+                    setActiveTab('editFormula')
+                  }
+                }}
+                className="px-3 py-1.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/30 text-teal-200 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="Edit Safety Calculation Formula"
+              >
+                <Sliders className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Edit Formula</span>
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer flex-shrink-0"
+              aria-label="Close"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* TABS */}
         <div className="flex items-center gap-1.5 px-4 sm:px-6 pt-3 pb-2 border-b border-slate-200 bg-slate-50 flex-shrink-0 overflow-x-auto scrollbar-none">
           <button
             onClick={() => setActiveTab('howItWorks')}
-            className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'howItWorks'
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
@@ -357,7 +464,7 @@ export default function SafetyIndexModal({ isOpen, onClose }) {
 
           <button
             onClick={() => setActiveTab('grades')}
-            className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 ${
+            className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
               activeTab === 'grades'
                 ? 'bg-emerald-600 text-white shadow-sm'
                 : 'text-slate-600 hover:bg-slate-200 hover:text-slate-900'
@@ -366,6 +473,20 @@ export default function SafetyIndexModal({ isOpen, onClose }) {
             <Award className="w-3.5 h-3.5" />
             <span>5. Performance Grades</span>
           </button>
+
+          {(isAdmin || isSuperAdmin) && (
+            <button
+              onClick={() => setActiveTab('editFormula')}
+              className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-all whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
+                activeTab === 'editFormula'
+                  ? 'bg-teal-600 text-white shadow-sm'
+                  : 'text-teal-700 bg-teal-50 hover:bg-teal-100 border border-teal-200'
+              }`}
+            >
+              <Sliders className="w-3.5 h-3.5" />
+              <span>⚙️ 6. Edit Calculation Formula</span>
+            </button>
+          )}
         </div>
 
         {/* TAB CONTENTS */}
@@ -653,7 +774,7 @@ export default function SafetyIndexModal({ isOpen, onClose }) {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {SCORING_COMPONENTS.map((comp) => (
+                {displayComponents.map((comp) => (
                   <div
                     key={comp.id}
                     className="p-4 rounded-2xl border border-slate-200 bg-white hover:border-emerald-300 hover:shadow-md transition-all space-y-3"
@@ -899,6 +1020,13 @@ export default function SafetyIndexModal({ isOpen, onClose }) {
                   </p>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* TAB 6: EDIT FORMULA */}
+          {activeTab === 'editFormula' && (
+            <div className="space-y-4 animate-fadeIn">
+              <SafetyFormulaEditor onFormulaSaved={() => fetchFormula()} />
             </div>
           )}
         </div>

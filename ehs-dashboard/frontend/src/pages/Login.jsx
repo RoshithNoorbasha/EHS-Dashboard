@@ -39,22 +39,6 @@ export default function Login() {
   const [successMsg, setSuccessMsg] = useState('')
   const [loading, setLoading] = useState(false)
 
-  // Quick demo accounts
-  const demoAccounts = [
-    { label: 'Super Admin', user: 'superadmin', pass: 'SuperAdmin@Greenko2026' },
-    { label: 'Cluster Admin', user: 'admin', pass: 'Admin@Greenko2026' },
-    { label: 'Manager', user: 'manager', pass: 'Manager@Greenko2026' },
-    { label: 'Pinnapuram', user: 'site_pinnapuram', pass: 'Pinna@Greenko2026' },
-    { label: 'Ghani', user: 'site_ghani', pass: 'Ghani@Greenko2026' },
-  ]
-
-  const handleQuickFill = (user, pass) => {
-    setLoginUsername(user)
-    setLoginPassword(pass)
-    setError('')
-    setActiveTab('login')
-  }
-
   const handleLoginSubmit = async (e) => {
     e.preventDefault()
     setError('')
@@ -376,31 +360,13 @@ export default function Login() {
           </form>
         )}
 
-        {/* Clean Quick Demo Access (1-Click Fill) */}
-        <div className="mt-6 pt-5 border-t border-slate-100">
-          <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400 mb-2.5 justify-center">
-            <Sparkles className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Quick Demo Accounts</span>
-          </div>
-          <div className="flex flex-wrap gap-1.5 justify-center">
-            {demoAccounts.map((acc) => (
-              <button
-                key={acc.user}
-                type="button"
-                onClick={() => handleQuickFill(acc.user, acc.pass)}
-                className="px-2.5 py-1 rounded-lg bg-slate-50 hover:bg-emerald-50 text-slate-600 hover:text-emerald-700 border border-slate-200/70 hover:border-emerald-200 text-[11px] font-medium transition-colors cursor-pointer"
-                title={`Login as ${acc.label}`}
-              >
-                {acc.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Footer info */}
-        <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+        {/* Footer info & credits */}
+        <div className="mt-6 pt-4 border-t border-slate-100 text-center space-y-1">
           <p className="text-[11px] text-slate-400 font-medium">
             Greenko Pinnapuram Cluster &bull; EHS Portal
+          </p>
+          <p className="text-[11px] font-medium text-slate-400">
+            Designed &amp; Developed by <span className="font-semibold text-emerald-600">Roshith</span>
           </p>
         </div>
       </div>
